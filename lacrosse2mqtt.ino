@@ -27,6 +27,8 @@
 #include "lacrosse.h"
 #include "SX127x.h"
 
+#include <WiFiManager.h>
+
 //#define DEBUG_DAVFS
 
 #ifdef DEBUG_DAVFS
@@ -367,7 +369,17 @@ void setup(void)
     mqtt_id = String(tmp);
     config.mqtt_port = 1883; /* default */
     Serial.begin(115200);
-    start_WiFi("lacrosse2mqtt");
+    //start_WiFi("lacrosse2mqtt");
+    WiFiManager wifiManager;
+
+    if (!wifiManager.autoConnect("HeltecLaCrosseAP")) {
+      Serial.println("Failed to connect and hit timeout");
+      ESP.restart();
+      delay(1000);
+    }
+
+    Serial.println("Connected to WiFi!");
+
     littlefs_ok = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
     if (!littlefs_ok)
         Serial.println("LittleFS Mount Failed");
