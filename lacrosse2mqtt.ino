@@ -31,10 +31,6 @@
 
 //#define DEBUG_DAVFS
 
-#ifdef DEBUG_DAVFS
-#include <ESPWebDAV.h>
-#endif
-
 #define FORMAT_LITTLEFS_IF_FAILED false
 
 /* if display is default to off, keep it on for this many seconds after power on
@@ -63,27 +59,8 @@ Cache fcache[SENSOR_NUM]; /* 128 IDs x 2 datarates */
 String id2name[SENSOR_NUM];
 uint8_t hass_cfg[SENSOR_NUM];
 
-/* TTGO board OLED pins to ESP32 GPIOs */
-/*
-  #define OLED_SDA 4
-  #define OLED_SCL 15
-  #define OLED_RST 16
-  ==> already defined in board header!
- */
 SSD1306Wire display(0x3c, OLED_SDA, OLED_SCL);
 
-/* TTGO board SX127x ports
-   GPIO5   SX1278s SCK
-   GPIO19  SX1278s MISO
-   GPIO27  SX1278s MOSI
-   GPIO18  SX1278s CS
-   GPIO14  SX1278s RESET
-   GPIO26  SX1278s IRQ(Interrupt Request)
-  #define SS 18
-  #define RST 14
-  #define DI0 26 // interrupt mode did not work well
-  ==> already defined in board header, also MOSI, MISO,...!
- */
 SX127x SX(LORA_CS, LORA_RST);
 
 #define ESP_MANUFACTURER  "ESPRESSIF"
@@ -165,27 +142,7 @@ void pub_hass_config(int what, byte ID)
 
     String where_lower = where;
     where_lower.toLowerCase();
-    /*
-     * mosquitto_pub -h server -t 'homeassistant/sensor/lacrosse2mqtt_aussen_temp/config' -m \
-     * '{
-          "state_class": "measurement",
-          "device_class": "temperature",
-          "state_topic":"climate/Aussen/temp",
-          "unique_id":"sensor.lacrosse2mqtt.aussen.temp",
-          "unit_of_measurement":"°C",
-          "name":"Temperatur Aussen",
-          "value_template":"{{ value }}"
-      }'
-     * {
-          "state_class": "measurement",
-          "device_class": "humidity",
-          "state_topic": "climate/Stube/humi",
-          "unique_id": "sensor.lacrosse2mqtt.stube.humi",
-          "unit_of_measurement": "%",
-          "name": "Luftfeuchtigkeit Stube2",
-          "value_template": "{{ value }}"
-       }
-     */
+    
     String uid = mqtt_id + "_" + where_lower + "_" + value[what];
     String topic = hass_base + uid + "/config";
     String msg = "{"
@@ -197,7 +154,7 @@ void pub_hass_config(int what, byte ID)
             "},"
             "\"origin\":{"
                 "\"name\":\"lacrosse2mqtt\","
-                "\"url\":\"https://github.com/seife/lacrosse2mqtt\""
+                "\"url\":\"https://github.com/steigerbalett/lacrosse2mqtt\""
             "},"
             "\"state_class\":\"measurement\","
             "\"device_class\":\"" + dclass[what]+ "\","
@@ -245,7 +202,7 @@ void update_display(LaCrosse::Frame *frame)
         return;
     }
     snprintf(tmp, 31, "%dd %d:%02d:%02d", now / 86400, (now % 86400) / 3600, (now % 3600) / 60, now % 60);
-    String status = "WiFi:" + wifi_disp + " up: " + String(tmp);
+    String status = wifi_disp + " up: " + String(tmp);
     bool s_invert = (now / 60) & 0x01; /* 60 seconds inverted, the next 60s not */
     display.setColor(WHITE);
     if (s_invert) {
@@ -369,7 +326,7 @@ void setup(void)
     mqtt_id = String(tmp);
     config.mqtt_port = 1883; /* default */
     Serial.begin(115200);
-    //start_WiFi("lacrosse2mqtt");
+
     WiFiManager wifiManager;
 
     if (!wifiManager.autoConnect("HeltecLaCrosseAP")) {
@@ -459,22 +416,13 @@ static int last_state = -1;
 void loop(void)
 {
     handle_client();
-#ifdef DEBUG_DAVFS
-    dav.handleClient();
-#endif
+
     uint32_t button_time = check_button();
     if (button_time > 0) {
         Serial.print("button_time: ");
         Serial.println(button_time);
     }
-    if (wifi_state != STATE_WPS) {
-        WiFiStatusCheck();
-        if (button_time > 2000) {
-            start_WPS();
-            button_time = 0;
-            auto_display_on = uptime_sec();
-        }
-    }
+    
     if (button_time > 100 && button_time <= 2000) {
         display_on = ! display_on;
         /* ensure that display can be turned off while timeout is still active */
