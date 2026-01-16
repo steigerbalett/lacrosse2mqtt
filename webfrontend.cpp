@@ -381,9 +381,9 @@ void add_sysinfo_footer(String &s)
 {
     s += "<p>"
         "System information: Uptime " + time_string() + "<br>"
-        ",  Software version: " + LACROSSE2MQTT_VERSION + "<br>"
-        ",  Built: " + __DATE__ + " " + __TIME__ + "<br>"
-        ",  Reset reason: " + ESP32GetResetReason(0) +
+        "Software version: " + LACROSSE2MQTT_VERSION + "<br>"
+        "Built: " + __DATE__ + " " + __TIME__ + "<br>"
+        "Reset reason: " + ESP32GetResetReason(0) +
         "</p>\n";
 }
 
@@ -569,6 +569,9 @@ void setup_web()
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
     server.on("/config.html", handle_config);
+    server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request){
+  request->redirect("https://raw.githubusercontent.com/steigerbalett/lacrosse2mqtt/2026/favicon.ico");
+});
     server.onNotFound([](){
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
         Serial.println("404: " + server.uri());
