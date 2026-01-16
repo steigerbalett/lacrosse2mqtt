@@ -145,16 +145,21 @@ void pub_hass_config(int what, byte ID)
     
     String uid = mqtt_id + "_" + where_lower + "_" + value[what];
     String topic = hass_base + uid + "/config";
+
+    String device_id = mqtt_id + value[what];
+
     String msg = "{"
             "\"device\":{"
-                "\"identifiers\":[\"" + mqtt_id + value[what]+"\"],"
-                "\"name\":\""+name[what]+"\","
+                "\"identifiers\":[\"" + device_id + "\"],"
+                "\"name\":\"" + where + " Sensor\","
                 "\"manufacturer\":\"Lacrosse2MQTT\","
-                "\"model\":\"esp32\""
+                "\"sw_version\":\"v2026\","
+                "\"model\":\"heltec_wifi_lora_32_V2\""
             "},"
             "\"origin\":{"
                 "\"name\":\"lacrosse2mqtt\","
                 "\"url\":\"https://github.com/steigerbalett/lacrosse2mqtt\""
+                "\"sw_version\":\"v2026\""
             "},"
             "\"state_class\":\"measurement\","
             "\"device_class\":\"" + dclass[what]+ "\","
@@ -163,10 +168,12 @@ void pub_hass_config(int what, byte ID)
             "\"state_topic\":\"" + pretty_base + where+"/"+value[what]+"\","
             "\"name\":\""+where+"\"" +
         "}";
-    Serial.println(topic);
+
+    Serial.println("HA Discovery: " + topic);
     Serial.println(topic.length());
     Serial.println(msg);
     Serial.println(msg.length());
+
     mqtt_client.beginPublish(topic.c_str(), msg.length(), true);
     mqtt_client.print(msg);
     mqtt_client.endPublish();

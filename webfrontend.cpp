@@ -9,7 +9,7 @@
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  __DATE__ " " __TIME__
+#define LACROSSE2MQTT_VERSION  Build: " " __DATE__ " " __TIME__
 #endif
 
 static WebServer server(80);
@@ -228,10 +228,20 @@ void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
     String h;
-    s += "<table><tr><th>ID</th><th>Temperature</th><th>Humidity</th><th>RSSI</th><th>Name</th><th>Age (ms)</th><th>Battery</th><th>New?</th>";
+    s += "<table class=\"sensors\">\n";
+    s += "<thead><tr>"
+         "<th>ID</th>"
+         "<th>Temperature</th>"
+         "<th>Humidity</th>"
+         "<th>RSSI</th>"
+         "<th>Name</th>"
+         "<th>Age (ms)</th>"
+         "<th>Battery status</th>"
+         "<th>New battery</th>";
     if (rawdata)
         s += "<th>Raw Frame Data</th>";
-    s += "</tr>\n";
+    s += "</tr></thead>\n<tbody>\n";
+
     for (int i = 0; i < SENSOR_NUM; i++) {
         LaCrosse::Frame f;
         bool stale = false;
@@ -243,9 +253,15 @@ void add_current_table(String &s, bool rawdata)
                 continue;
         }
         if (stale) {
-            s +=  "<tr><td>" + String(i) +
-                 "</td><td>-</td><td>-</td><td>-</td><td>" + name +
-                 "</td><td>-</td><td>-</td><td>-</td>";
+            s += "<tr class=\"stale\">"
+                 "<td>" + String(i) + "</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>" + name + "</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>-</td>";
             if (rawdata)
                 s += "<td>-</td>";
             s += "</tr>\n";
@@ -261,15 +277,20 @@ void add_current_table(String &s, bool rawdata)
             h = String(f.humi) + "%";
         else
             h = "-";
-        s +=  "<tr><td>" + String(i) +
-             "</td><td>" + String(f.temp, 1) +
-             "</td><td>" + h +
-             "</td><td>" + String(fcache[i].rssi) +
-             "</td><td>" + name +
-             "</td><td>" + String(now - fcache[i].timestamp) +
-             "</td><td>" + String(f.batlo ? "LOW!" : "OK") +
-             "</td><td>" + String(f.init ? "YES!" : "no") +
-             "</td>";
+
+        String battText = f.batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
+        String initText = f.init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
+
+        s += "<tr>"
+             "<td>" + String(i) + "</td>"
+             "<td>" + String(f.temp, 1) + "</td>"
+             "<td>" + h + "</td>"
+             "<td>" + String(fcache[i].rssi) + "</td>"
+             "<td>" + name + "</td>"
+             "<td>" + String(now - fcache[i].timestamp) + "</td>"
+             "<td>" + battText + "</td>"
+             "<td>" + initText + "</td>";
+
         if (rawdata) {
             s += "<td>0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
@@ -281,7 +302,7 @@ void add_current_table(String &s, bool rawdata)
         }
         s += "</tr>\n";
     }
-    s += "</table>\n";
+    s += "</tbody></table>\n";
 }
 
 void add_header(String &s, String title)
@@ -294,8 +315,15 @@ void add_header(String &s, String title)
         "<style>\n"
         "font-family: Arial, Helvetica, sans-serif;\n"
         "td, th {\n"
-        " text-align: right;\n"
-        "}\n"
+        "text-align: right;}\n"
+        ".sensors { border-collapse: collapse; width: 100%; margin: 10px 0; }\n"
+        ".sensors th, .sensors td { border: 1px solid #ddd; padding: 8px; text-align: right; }\n"
+        ".sensors th { background-color: #f2f2f2; font-weight: bold; }\n"
+        ".sensors tr:nth-child(even) { background-color: #f9f9f9; }\n"
+        ".stale { background-color: #ffebee; color: #666; }\n"
+        ".batt-weak { color: #d32f2f;}\n"
+        ".init-new { color: #388e3c; }\n"
+        ".batt-ok, .init-no { color: #333; }\n"
         "table td:nth-child(9) {\n"
         " font-family: monospace;\n"
         " font-size: 10pt;\n"
