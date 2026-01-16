@@ -16,6 +16,7 @@ public:
         uint8_t pad:5;      /* ...for alignment */
         float   temp;       /* byte 5-8 */
         int     rate;       /* byte 9-12 */
+        float   temp2;
     };
     static void DecodeFrame(byte *bytes, struct Frame *frame);
     static bool DisplayFrame(byte *data, struct Frame *frame);

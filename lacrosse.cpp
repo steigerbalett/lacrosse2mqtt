@@ -41,9 +41,18 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     f->batlo = (bytes[3] & 0x80) ? 1 : 0;
     f->humi  = bytes[3] & 0x7f;
     if (f->humi == 0x7d) /* indicates that temperature is second channel */
+        {
         f->ID |= 0x40;   /* => increase ID by 64 to indicate difference  */
+        f->temp2 = f->temp;  /* define temp2 in struct Frame */
+        f->humi = 0;         /* no humidity for Channel 2 */
+        } 
+    else {
+        f->temp2 = -99.9;    // no temp
+        }
     if (f->rate == 9579) /* slow rate sensors => increase ID by 128 */
         f->ID |= 0x80;
+    if (f->rate == 8842)
+        f->ID |= 0x40;
 }
 
 bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
@@ -57,7 +66,11 @@ bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
 
     DisplayRaw(last[f->ID], "Sensor ", data, FRAME_LENGTH, f->rssi, f->rate);
 
-    Serial.printf(" ID:%-3d Temp:%-5.1f init:%d batlo:%d", f->ID, f->temp, f->init, f->batlo);
+    Serial.printf(" ID:%-3d Temp:%-5.1f", f->ID, f->temp);
+    if (f->temp2 > -99) {  // (TX25TP)
+        Serial.printf(" Temp2:%-5.1f", f->temp2);
+    }
+    Serial.printf(" init:%d batlo:%d", f->init, f->batlo);
     if (f->humi > 0 && f->humi <= 100)
         Serial.printf(" Hum:%d", f->humi);
     Serial.println();

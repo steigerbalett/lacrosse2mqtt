@@ -232,6 +232,7 @@ void add_current_table(String &s, bool rawdata)
     s += "<thead><tr>"
          "<th>ID</th>"
          "<th>Temperature</th>"
+         "<th>Temp2</th>"
          "<th>Humidity</th>"
          "<th>RSSI</th>"
          "<th>Name</th>"
@@ -258,6 +259,7 @@ void add_current_table(String &s, bool rawdata)
                  "<td>-</td>"
                  "<td>-</td>"
                  "<td>-</td>"
+                 "<td>-</td>"
                  "<td>" + name + "</td>"
                  "<td>-</td>"
                  "<td>-</td>"
@@ -276,6 +278,9 @@ void add_current_table(String &s, bool rawdata)
         }
         if (! LaCrosse::TryHandleData(fcache[i].data, &f))
             continue;
+
+        String temp2Str = (f.temp2 > -99) ? String(f.temp2, 1) + "°C" : "-";
+
         if (f.humi <= 100)
             h = String(f.humi) + "%";
         else
@@ -287,6 +292,7 @@ void add_current_table(String &s, bool rawdata)
         s += "<tr>"
              "<td>" + String(i) + "</td>"
              "<td>" + String(f.temp, 1) + "</td>"
+             "<td>" + temp2Str + "</td>"
              "<td>" + h + "</td>"
              "<td>" + String(fcache[i].rssi) + "</td>"
              "<td>" + name + "</td>"
@@ -316,21 +322,25 @@ void add_header(String &s, String title)
         "<meta name=\"description\" content=\"lacrosse sensors to mqtt converter\">\n"
         "<title>" + title + "</title>\n"
         "<style>\n"
-        "font-family: Arial, Helvetica, sans-serif;\n"
-        "td, th {\n"
-        "text-align: right;}\n"
-        ".sensors { border-collapse: collapse; width: 100%; margin: 10px 0; }\n"
-        ".sensors th, .sensors td { border: 1px solid #ddd; padding: 8px; text-align: right; }\n"
-        ".sensors th { background-color: #f2f2f2; font-weight: bold; }\n"
-        ".sensors tr:nth-child(even) { background-color: #f9f9f9; }\n"
-        ".stale { background-color: #ffebee; color: #666; }\n"
-        ".batt-weak { color: #d32f2f;}\n"
-        ".init-new { color: #388e3c; }\n"
-        ".batt-ok, .init-no { color: #333; }\n"
-        "table td:nth-child(9) {\n"
-        " font-family: monospace;\n"
-        " font-size: 10pt;\n"
+        "body {\n"
+        " font-family: Arial, Helvetica, sans-serif;\n"
         "}\n"
+        ".sensors {\n"
+        " border-collapse: collapse;\n"
+        " width: 100%;\n"
+        "}\n"
+        ".sensors th, .sensors td {\n"
+        " border: 1px solid #ddd;\n"
+        " padding: 8px;\n"
+        " text-align: right;\n"
+        "}\n"
+        ".sensors th { background-color: #f2f2f2; }\n"
+        ".sensors .stale { background-color: #f0f0f0; }\n"
+        ".batt-weak { color: red; }\n"
+        ".batt-ok { color: green; }\n"
+        ".init-new { color: orange; }\n"
+        ".init-no { color: gray; }\n"
+        ".rawdata { font-family: monospace; font-size: 10pt; text-align: left; }\n"
         "</style>\n"
         "</head>\n<body>\n"
         "<H1>" + title + "</H1>\n";
