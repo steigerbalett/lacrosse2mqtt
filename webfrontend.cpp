@@ -9,7 +9,7 @@
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION "unknown"
+#define LACROSSE2MQTT_VERSION  __DATE__ " " __TIME__
 #endif
 
 static WebServer server(80);
@@ -292,6 +292,7 @@ void add_header(String &s, String title)
         "<meta name=\"description\" content=\"lacrosse sensors to mqtt converter\">\n"
         "<title>" + title + "</title>\n"
         "<style>\n"
+        "font-family: Arial, Helvetica, sans-serif;\n"
         "td, th {\n"
         " text-align: right;\n"
         "}\n"
