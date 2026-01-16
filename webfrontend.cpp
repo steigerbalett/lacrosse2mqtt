@@ -267,10 +267,13 @@ void add_current_table(String &s, bool rawdata)
             s += "</tr>\n";
             continue;
         }
-        if (i & 0x80)
+        if (i & 0x80) {
             f.rate = 9579;
-        else
+        } else if ((i & 0x40)) {
+            f.rate = 8842;
+        } else {
             f.rate = 17241;
+        }
         if (! LaCrosse::TryHandleData(fcache[i].data, &f))
             continue;
         if (f.humi <= 100)

@@ -2,7 +2,7 @@
 #include <SPI.h>
 
 /* datarates in bps which will be cycled in NextDataRate() */
-static int _rates[] = { 9579, 17241 };
+static int _rates[] = { 8842, 9579, 17241 };
 
 bool SX127x::ready()
 {
