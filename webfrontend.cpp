@@ -245,6 +245,7 @@ void add_current_table(String &s, bool rawdata)
 
     for (int i = 0; i < SENSOR_NUM; i++) {
         LaCrosse::Frame f;
+        f.temp2 = -99.9f;
         bool stale = false;
         String name = id2name[i];
         if (fcache[i].timestamp == 0) {
@@ -279,13 +280,9 @@ void add_current_table(String &s, bool rawdata)
         if (! LaCrosse::TryHandleData(fcache[i].data, &f))
             continue;
 
+        h = (f.humi > 0 && f.humi <= 100) ? String(f.humi) + "%" : "-";
         String temp2Str = (f.temp2 > -99) ? String(f.temp2, 1) + "°C" : "-";
-
-        if (f.humi <= 100)
-            h = String(f.humi) + "%";
-        else
-            h = "-";
-
+  
         String battText = f.batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
         String initText = f.init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
 
