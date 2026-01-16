@@ -232,7 +232,7 @@ void add_current_table(String &s, bool rawdata)
     s += "<thead><tr>"
          "<th>ID</th>"
          "<th>Temperature</th>"
-         "<th>Temp2</th>"
+         "<th>Temp. 2</th>"
          "<th>Humidity</th>"
          "<th>RSSI</th>"
          "<th>Name</th>"
@@ -325,6 +325,7 @@ void add_header(String &s, String title)
         ".sensors {\n"
         " border-collapse: collapse;\n"
         " width: 100%;\n"
+        " max-width: 1200px;\n"
         "}\n"
         ".sensors th, .sensors td {\n"
         " border: 1px solid #ddd;\n"
@@ -379,10 +380,10 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 void add_sysinfo_footer(String &s)
 {
     s += "<p>"
-        "System information: Uptime " + time_string() +
-        ", Software version: " + LACROSSE2MQTT_VERSION +
-        ", Built: " + __DATE__ + " " + __TIME__ +
-        ", Reset reason: " + ESP32GetResetReason(0) +
+        "System information: Uptime " + time_string() + "<br>"
+        ",  Software version: " + LACROSSE2MQTT_VERSION + "<br>"
+        ",  Built: " + __DATE__ + " " + __TIME__ + "<br>"
+        ",  Reset reason: " + ESP32GetResetReason(0) +
         "</p>\n";
 }
 
