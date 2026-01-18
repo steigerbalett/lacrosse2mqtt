@@ -569,9 +569,10 @@ void setup_web()
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
     server.on("/config.html", handle_config);
-    server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request){
-  request->redirect("https://raw.githubusercontent.com/steigerbalett/lacrosse2mqtt/2026/favicon.ico");
-});
+    server.on("/favicon.ico", HTTP_GET, []() {
+        server.sendHeader("Location", "https://github.com/steigerbalett/lacrosse2mqtt/raw/master/favicon.ico", true);
+        server.send(302, "text/plain", "");
+    });
     server.onNotFound([](){
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
         Serial.println("404: " + server.uri());
