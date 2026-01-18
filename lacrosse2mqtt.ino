@@ -213,8 +213,14 @@ void update_display(LaCrosse::Frame *frame)
     bool s_invert = (now / 60) & 0x01; /* 60 seconds inverted, the next 60s not */
     display.setColor(WHITE);
     if (s_invert) {
-        display.fillRect(0, 0, 128,64); /* clear() does fix set black background */
-        display.setColor(BLACK);
+        display.clear();
+    /*    display.setFont(ArialMT_Plain_10); */
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(0, 0, "WiFi:");
+        display.drawString(0, 12, WiFi.SSID());
+        display.drawString(0, 28, "IP:");
+        display.drawString(0, 40, WiFi.localIP().toString());
+        display.display();
     } else {
         display.clear();
     }
@@ -343,6 +349,10 @@ void setup(void)
     }
 
     Serial.println("Connected to WiFi!");
+    Serial.print("Verbundenes WLAN: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("IP-Adresse: ");
+    Serial.println(WiFi.localIP());
 
     littlefs_ok = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
     if (!littlefs_ok)

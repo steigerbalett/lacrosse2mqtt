@@ -9,7 +9,7 @@
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "DEV260116"
+#define LACROSSE2MQTT_VERSION  "DEV260118"
 #endif
 
 static WebServer server(80);
@@ -503,7 +503,7 @@ void handle_config() {
         "<form action=\"/config.html\">\n"
         "<table>\n"
             "<tr>\n"
-                "<td>name / IP address:</td><td><input name=\"mqtt_server\" value=\"" + config.mqtt_server + "\"></td>"
+                "<td>FQDN / IP address:</td><td><input name=\"mqtt_server\" value=\"" + config.mqtt_server + "\"></td>"
                 "<td>Port:</td><td><input type=\"number\" name=\"mqtt_port\" value=\"" + String(config.mqtt_port) + "\"></td>"
             "</tr>\n"
             "<tr>\n"
