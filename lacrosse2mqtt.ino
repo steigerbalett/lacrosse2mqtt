@@ -195,62 +195,66 @@ void expire_cache()
 String wifi_disp;
 void update_display(LaCrosse::Frame *frame)
 {
+    char tmp[32];
+    // last_display = millis();
     uint32_t now = uptime_sec();
     if (display_on)
         display.displayOn();
     else if (now < auto_display_on + DISPLAY_TIMEOUT) {
+        // Serial.println("update_display: auto_on not yet expired " + String(now - auto_display_on));
         display.displayOn();
     } else {
+        // Serial.println("auto_display_on: " + String(auto_display_on) + " now: " + String(now));
         display.displayOff();
         return;
     }
-    
-    bool show_wifi = (now / 60) & 0x01;
-    
-    display.clear();
+    snprintf(tmp, 31, "%dd %d:%02d:%02d", now / 86400, (now % 86400) / 3600, (now % 3600) / 60, now % 60);
+    String status = wifi_disp + " up: " + String(tmp);
+    bool s_invert = (now / 60) & 0x01; /* 60 seconds inverted, the next 60s not */
     display.setColor(WHITE);
-    display.setFont(ArialMT_Plain_10);
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    
-    if (show_wifi) {
-        display.drawString(0, 0, "WiFi Status:");
-        display.drawString(0, 14, "SSID:");
-        display.drawString(40, 14, WiFi.SSID());
+    if (s_invert) {
+        display.clear();
+    /*    display.setFont(ArialMT_Plain_10); */
+        display.setTextAlignment(TEXT_ALIGN_LEFT);
+        display.drawString(0, 0, "WiFi:");
+        display.drawString(0, 12, WiFi.SSID());
         display.drawString(0, 28, "IP:");
-        display.drawString(40, 28, WiFi.localIP().toString());
-        display.drawString(0, 42, "Status:");
-        display.drawString(50, 42, wifi_disp);
+        display.drawString(0, 40, WiFi.localIP().toString());
+        display.display();
     } else {
-        display.drawString(0, 0, "Sensor Data:");
-        
-        if (frame && frame->valid) {
-            display.drawString(0, 14, "ID/Name:");
-            if (id2name[frame->ID].length() > 0) {
-                display.drawString(0, 28, id2name[frame->ID]);
-            } else {
-                display.drawString(0, 28, "ID: " + String(frame->ID));
-            }
-            
-            char tempBuf[16];
-            snprintf(tempBuf, sizeof(tempBuf), "T:%.1fC H:%d%%", frame->temp, frame->humi);
-            display.drawString(0, 42, tempBuf);
-            
-            // RAW (last 16 Bytes HEX)
-            display.drawString(0, 56, "RAW:");
-            
-            // First 8 Bytes
-            for (int i = 0; i < 8 && i < FRAME_LENGTH; i++) {
-                if (frame->data[i] < 16) display.print("0");
-                display.print(frame->data[i], HEX);
-                if (i < 7) display.print(".");
-            }
-        } else {
-            display.drawString(0, 28, "Keine gültigen");
-            display.drawString(0, 42, "Daten empfangen");
-            display.drawString(0, 56, "RAW: warten...");
-        }
+        display.clear();
     }
-    
+
+    if (frame) {
+        if (frame->valid) {
+            if (id2name[frame->ID].length() > 0) {
+                display.print(id2name[frame->ID]);
+                display.printf(" %.1fC", frame->temp);
+            } else {
+                display.printf("id: %02d %.1fC", frame->ID, frame->temp);
+            }
+            if (frame->humi <= 100)
+                display.printf(" %d%%", frame->humi);
+        } else {
+            display.print("invalid");
+        }
+        display.println();
+    }
+    /* new display lib now uses whole display for log window,
+     * so we need to clear top area for status line, depending on invert or not */
+    OLEDDISPLAY_COLOR col = display.getColor();
+    switch (col) {
+        case BLACK:
+            display.setColor(WHITE);
+            break;
+        case WHITE:
+            display.setColor(BLACK);
+            break;
+    }
+    display.fillRect(0, 0, 128, 14);
+    /* now draw status line */
+    display.setColor(col);
+    display.drawString(0, 0, status);
     display.display();
 }
 
