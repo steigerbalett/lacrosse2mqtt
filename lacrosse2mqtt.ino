@@ -233,30 +233,28 @@ void update_display(LaCrosse::Frame *frame)
         display.drawString(0, 0, "Sensor Data:");
         
         if (frame && frame->valid) {
-            display.drawString(0, 14, "ID/Name:");
             if (id2name[frame->ID].length() > 0) {
-                display.drawString(0, 28, id2name[frame->ID]);
+                display.drawString(0, 14, id2name[frame->ID]);
             } else {
-                display.drawString(0, 28, "ID: " + String(frame->ID));
+                display.drawString(0, 14, "ID: " + String(frame->ID));
             }
             
-            char tempBuf[16];
+            char tempBuf[20];
             snprintf(tempBuf, sizeof(tempBuf), "T:%.1fC H:%d%%", frame->temp, frame->humi);
-            display.drawString(0, 42, tempBuf);
+            display.drawString(0, 28, tempBuf);
             
-            // RAW (last 16 Bytes HEX)
-            display.drawString(0, 56, "RAW:");
-            
-            // First 8 Bytes
+            // RAW Daten aus Cache holen
+            display.drawString(0, 42, "RAW:");
+            String rawHex = "";
             for (int i = 0; i < 8 && i < FRAME_LENGTH; i++) {
-                if (frame->data[i] < 16) display.print("0");
-                display.print(frame->data[i], HEX);
-                if (i < 7) display.print(".");
+                if (fcache[frame->ID].data[i] < 16) rawHex += "0";
+                rawHex += String(fcache[frame->ID].data[i], HEX);
+                if (i < 7) rawHex += " ";
             }
+            display.drawString(0, 54, rawHex);
         } else {
             display.drawString(0, 28, "Keine gültigen");
             display.drawString(0, 42, "Daten empfangen");
-            display.drawString(0, 56, "RAW: warten...");
         }
     }
     
