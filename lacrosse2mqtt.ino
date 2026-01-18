@@ -192,15 +192,6 @@ void expire_cache()
     }
 }
 
-#define RAWDATA_BUFFER_SIZE 20
-String rawDataBuffer[RAWDATA_BUFFER_SIZE];
-int rawDataIndex = 0;
-
-void addRawData(String data) {
-    rawDataBuffer[rawDataIndex] = data;
-    rawDataIndex = (rawDataIndex + 1) % RAWDATA_BUFFER_SIZE;
-}
-
 String wifi_disp;
 void update_display(LaCrosse::Frame *frame)
 {

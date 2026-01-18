@@ -350,7 +350,6 @@ void add_header(String &s, String title)
         ".rawdata { font-family: monospace; font-size: 10pt; text-align: left; }\n"
         "</style>\n"
         "</head>\n<body>\n"
-        getNavigation();
         "<H1>" + title + "</H1>\n";
 }
 
@@ -588,7 +587,7 @@ void handleRawData() {
     html += "<div style='padding:20px;'>";
     html += "<table><tr><th>#</th><th>Raw HEX Data</th></tr>";
     
-    for (int i = 0; i < RAWDATA_BUFFER_SIZE; i++) {
+    for (int i = 0; i < 20; i++) {
         int idx = (rawDataIndex - 1 - i + RAWDATA_BUFFER_SIZE) % RAWDATA_BUFFER_SIZE;
         if (rawDataBuffer[idx].length() > 0) {
             html += "<tr><td>" + String(i+1) + "</td><td><pre>" + rawDataBuffer[idx] + "</pre></td></tr>";
