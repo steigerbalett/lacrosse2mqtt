@@ -44,15 +44,6 @@ static const uint8_t LED_BUILTIN = 2;
 /* maximum number of sensors: 64 x 2 channels x 2 datarates */
 #define SENSOR_NUM 256
 
-#define RAWDATA_BUFFER_SIZE 20
-String rawDataBuffer[RAWDATA_BUFFER_SIZE];
-int rawDataIndex = 0;
-
-void addRawData(String data) {
-    rawDataBuffer[rawDataIndex] = data;
-    rawDataIndex = (rawDataIndex + 1) % RAWDATA_BUFFER_SIZE;
-}
-
 struct Cache {
     unsigned long timestamp;
     uint8_t data[FRAME_LENGTH];
