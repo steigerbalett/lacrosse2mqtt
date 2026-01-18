@@ -192,6 +192,15 @@ void expire_cache()
     }
 }
 
+#define RAWDATA_BUFFER_SIZE 20
+String rawDataBuffer[RAWDATA_BUFFER_SIZE];
+int rawDataIndex = 0;
+
+void addRawData(String data) {
+    rawDataBuffer[rawDataIndex] = data;
+    rawDataIndex = (rawDataIndex + 1) % RAWDATA_BUFFER_SIZE;
+}
+
 String wifi_disp;
 void update_display(LaCrosse::Frame *frame)
 {
@@ -266,6 +275,14 @@ void receive()
     rssi = SX.GetRSSI();
     rate = SX.GetDataRate();
     payload = SX.GetPayloadPointer();
+
+    String rawHex = "";
+    for (int i = 0; i < 16; i++) {
+        if (payload[i] < 16) rawHex += "0";
+        rawHex += String(payload[i], HEX);
+        rawHex += " ";
+    }
+    addRawData(rawHex + " RSSI:" + String(rssi) + " Rate:" + String(rate));
 
     if (DEBUG) {
         Serial.print("\nEnd receiving, HEX raw data: ");

@@ -311,6 +311,15 @@ void add_current_table(String &s, bool rawdata)
     s += "</tbody></table>\n";
 }
 
+String getNavigation() {
+    return "<nav style='background:#333;padding:10px;'>"
+           "<a href='/' style='color:white;margin-right:20px;'>Home</a>"
+           "<a href='/config' style='color:white;margin-right:20px;'>Config</a>"
+           "<a href='/scan' style='color:white;margin-right:20px;'>WiFi Scan</a>"
+           "<a href='/rawdata' style='color:white;'>Raw Data</a>"
+           "</nav>";
+}
+
 void add_header(String &s, String title)
 {
     s += "<!DOCTYPE HTML><html lang=\"en\"><head>\n"
@@ -341,6 +350,7 @@ void add_header(String &s, String title)
         ".rawdata { font-family: monospace; font-size: 10pt; text-align: left; }\n"
         "</style>\n"
         "</head>\n<body>\n"
+        getNavigation();
         "<H1>" + title + "</H1>\n";
 }
 
@@ -487,6 +497,8 @@ void handle_config() {
     token = millis();
     resp += "<p>\n"
         "<form action=\"/config.html\">\n"
+        "<p>Verbunden mit: " + String(WiFi.SSID()) + "</p>" "<br>";
+        "<br>"
         "<table>\n"
             " <tr>\n"
                 "<td>ID (0-255):</td><td><input type=\"number\" name=\"id\" min=\"0\" max=\"255\"></td>"
@@ -560,6 +572,33 @@ void handle_config() {
     server.send(200, "text/html", resp);
 }
 
+void handleRawData() {
+    String html = "<!DOCTYPE html><html><head>"
+                  "<meta charset='UTF-8'>"
+                  "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                  "<meta http-equiv='refresh' content='5'>"  // Auto-refresh alle 5 Sekunden
+                  "<title>LaCrosse Raw Data</title>"
+                  "<style>body{font-family:Arial;margin:0;}table{width:100%;border-collapse:collapse;}"
+                  "th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#4CAF50;color:white;}"
+                  "pre{background:#f4f4f4;padding:10px;overflow-x:auto;}</style>"
+                  "</head><body>";
+    
+    html += getNavigation();
+    html += "<h1 style='padding:20px;'>Raw Data Debug</h1>";
+    html += "<div style='padding:20px;'>";
+    html += "<table><tr><th>#</th><th>Raw HEX Data</th></tr>";
+    
+    for (int i = 0; i < RAWDATA_BUFFER_SIZE; i++) {
+        int idx = (rawDataIndex - 1 - i + RAWDATA_BUFFER_SIZE) % RAWDATA_BUFFER_SIZE;
+        if (rawDataBuffer[idx].length() > 0) {
+            html += "<tr><td>" + String(i+1) + "</td><td><pre>" + rawDataBuffer[idx] + "</pre></td></tr>";
+        }
+    }
+    
+    html += "</table></div></body></html>";
+    server.send(200, "text/html", html);
+}
+
 void setup_web()
 {
     if (!load_idmap())
@@ -569,6 +608,7 @@ void setup_web()
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
     server.on("/config.html", handle_config);
+    server.on("/rawdata", HTTP_GET, handleRawData)
     server.on("/favicon.ico", HTTP_GET, []() {
         server.sendHeader("Location", "https://github.com/steigerbalett/lacrosse2mqtt/raw/master/favicon.ico", true);
         server.send(302, "text/plain", "");
