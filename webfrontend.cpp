@@ -252,19 +252,26 @@ void add_current_table(String &s, bool rawdata)
         LaCrosse::Frame f;
         bool stale = false;
         
-        bool isChannel2 = (i >= 64);
+        bool isChannel2 = (i >= 64 && i < 128);  // IDs 64-127 sind Kanal 2
         byte baseID = isChannel2 ? (i - 64) : i;
+        
         String name = id2name[baseID];
         
         if (fcache[i].timestamp == 0) {
-            if (name.length() > 0)
+            if (name.length() > 0 && !isChannel2) {
                 stale = true;
-            else
+            } else {
                 continue;
+            }
         }
         
+        String displayName = name;
         if (isChannel2 && name.length() > 0) {
-            name += " (Ch2)";
+            displayName += " (Ch2)";
+        } else if (isChannel2 && name.length() == 0) {
+            displayName = "Unknown Ch2";
+        } else if (name.length() == 0) {
+            displayName = "";
         }
         
         if (stale) {

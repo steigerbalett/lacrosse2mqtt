@@ -33,5 +33,6 @@ The following libraries are needed for building (installed via arduino lib manag
    * PubSubClient
    * ESP8266 and ESP32 OLED driver for SSD1306 displays
    * ArduinoJson
-   * ESPWebDav (for debugging only)
+   * Adafruit SSD1306
+   * ...
 

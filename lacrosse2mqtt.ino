@@ -19,7 +19,9 @@
 #include <LittleFS.h>
 #include <SPI.h>
 #include <PubSubClient.h>
-#include <SSD1306Wire.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "wifi_functions.h"
 #include "webfrontend.h"
 #include "globals.h"
@@ -50,9 +52,68 @@ Cache fcache[SENSOR_NUM]; /* 128 IDs x 2 datarates */
 String id2name[SENSOR_NUM];
 uint8_t hass_cfg[SENSOR_NUM];
 
-SSD1306Wire display(0x3c, OLED_SDA, OLED_SCL);
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
+
+#define STAR_COUNT 50
+struct Star {
+    float x, y, z;
+};
+Star stars[STAR_COUNT];
 
 SX127x SX(LORA_CS, LORA_RST);
+
+void display_set_on() {
+    display.ssd1306_command(SSD1306_DISPLAYON);
+}
+
+void display_set_off() {
+    display.ssd1306_command(SSD1306_DISPLAYOFF);
+}
+
+void reset_display_timeout() {
+    auto_display_on = uptime_sec();
+}
+
+void init_starfield() {
+    for (int i = 0; i < STAR_COUNT; i++) {
+        stars[i].x = random(-64, 64);
+        stars[i].y = random(-32, 32);
+        stars[i].z = random(1, 64);
+    }
+}
+
+void draw_starfield() {
+    display.clearDisplay();
+    
+    for (int i = 0; i < STAR_COUNT; i++) {
+        stars[i].z -= 0.5;
+        
+        if (stars[i].z <= 0) {
+            stars[i].x = random(-64, 64);
+            stars[i].y = random(-32, 32);
+            stars[i].z = 64;
+        }
+        
+        int sx = (int)(64 + (stars[i].x / stars[i].z) * 64);
+        int sy = (int)(32 + (stars[i].y / stars[i].z) * 32);
+        
+        if (sx >= 0 && sx < 128 && sy >= 0 && sy < 64) {
+            int size = (int)(3 - stars[i].z / 21);
+            if (size < 1) size = 1;
+            for (int dx = 0; dx < size; dx++) {
+                for (int dy = 0; dy < size; dy++) {
+                    if (sx + dx < 128 && sy + dy < 64) {
+                        display.drawPixel(sx + dx, sy + dy, SSD1306_WHITE);
+                    }
+                }
+            }
+        }
+    }
+    
+    display.display();
+}
 
 #define ESP_MANUFACTURER  "ESPRESSIF"
 #define ESP_MODEL_NUMBER  "ESP32"
@@ -188,66 +249,65 @@ void update_display(LaCrosse::Frame *frame)
 {
     uint32_t now = uptime_sec();
     
-    if (!display_on) {
-        display.displayOff();
-        return;
-    }
-    
-    if (now < auto_display_on + DISPLAY_TIMEOUT) {
-        display.displayOn();
+    if (config.display_on) {
+        // ALT: display.displayOn();
+        // NEU:
+        display.ssd1306_command(SSD1306_DISPLAYON);
     } else {
-        display.displayOff();
-        return;
+        if (now < auto_display_on + DISPLAY_TIMEOUT) {
+            display.ssd1306_command(SSD1306_DISPLAYON);
+        } else {
+            display.ssd1306_command(SSD1306_DISPLAYOFF);
+            return;
+        }
     }
     
     bool show_wifi = (now / 60) & 0x01;
     
-    display.clear();
-    display.setColor(WHITE);
-    display.setFont(ArialMT_Plain_10);
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
     
     if (show_wifi) {
-        display.drawString(0, 0, "WiFi Status:");
-        display.drawString(0, 14, "SSID: " + WiFi.SSID());
-        display.drawString(0, 28, "IP: " + WiFi.localIP().toString());
-        /* display.drawString(0, 42, "Status: " + wifi_disp); */
-        display.drawString(0, 54, "MQTT: " + String(mqtt_ok ? "OK" : "---"));
+        display.println("WiFi Status:");
+        display.println("SSID: " + WiFi.SSID());
+        display.println("IP: " + WiFi.localIP().toString());
+        display.setCursor(0, 54);
+        display.println("MQTT: " + String(mqtt_ok ? "OK" : "---"));
+        display.display();
     } else {
-        display.drawString(0, 0, "Sensor Data:");
+        display.println("Sensor Data:");
         
         if (frame && frame->valid) {
-            // Name oder ID
             if (id2name[frame->ID].length() > 0) {
-                display.drawString(0, 14, id2name[frame->ID]);
+                display.println(id2name[frame->ID]);
             } else {
-                display.drawString(0, 14, "ID: " + String(frame->ID));
+                display.println("ID: " + String(frame->ID));
             }
             
             char tempBuf[24];
             snprintf(tempBuf, sizeof(tempBuf), "Temp: %.1f C", frame->temp);
-            display.drawString(0, 28, tempBuf);
+            display.println(tempBuf);
             
-            if (frame->humi <= 100) {
+            if (frame->humi > 0 && frame->humi <= 100) {
                 snprintf(tempBuf, sizeof(tempBuf), "Humi: %d %%", frame->humi);
-                display.drawString(0, 42, tempBuf);
+                display.println(tempBuf);
             }
             
-            /* RAW data */
             String rawHex = "RAW: ";
             for (int i = 0; i < 5 && i < FRAME_LENGTH; i++) {
                 if (fcache[frame->ID].data[i] < 16) rawHex += "0";
                 rawHex += String(fcache[frame->ID].data[i], HEX);
                 if (i < 4) rawHex += " ";
             }
-            display.drawString(0, 54, rawHex);
+            display.setCursor(0, 54);
+            display.println(rawHex);
+            display.display();
         } else {
-            display.drawString(0, 28, "Warte auf");
-            display.drawString(0, 42, "Sensordaten...");
+            draw_starfield();
         }
     }
-    
-    display.display();
 }
 
 void receive()
@@ -351,7 +411,6 @@ void setup(void)
     Serial.begin(115200);
 
     WiFiManager wifiManager;
-
     if (!wifiManager.autoConnect("HeltecLaCrosseAP")) {
       Serial.println("Failed to connect and hit timeout");
       ESP.restart();
@@ -372,21 +431,30 @@ void setup(void)
 
     pinMode(KEY_BUILTIN, INPUT);
     pinMode(LED_BUILTIN, OUTPUT);
-    pinMode(OLED_RST, OUTPUT);
-    digitalWrite(OLED_RST, LOW); // set GPIO16 low to reset OLED
-    delay(50);
-    digitalWrite(OLED_RST, HIGH);
+        Wire.begin(OLED_SDA, OLED_SCL);
+    
+    // NEU: Display-Initialisierung für Adafruit_SSD1306
+    if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+        Serial.println(F("SSD1306 allocation failed"));
+        for(;;); // Don't proceed, loop forever
+    }
+    
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
 
-    display.init();
-    display.setContrast(16); /* it is for debug only, so dimming is ok */
-    display.flipScreenVertically();
-    display.setFont(ArialMT_Plain_10);
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-
-    delay(1000); /* for Serial to really work */
+    delay(1000);
 
     Serial.println("TTGO LORA lacrosse2mqtt converter");
     Serial.println(mqtt_id);
+    
+    // Starfield-Animation beim Booten (10 Sekunden)
+    init_starfield();
+    unsigned long boot_animation_start = millis();
+    while (millis() - boot_animation_start < 10000) {
+        draw_starfield();
+        delay(50);
+    }
 #if 0
     Serial.println("LaCrosse::Frame Cache fcache id2name size: ");
     Serial.println(sizeof(LaCrosse::Frame));
@@ -394,14 +462,18 @@ void setup(void)
     Serial.println(sizeof(fcache));
     Serial.println(sizeof(id2name));
 #endif
-    display.drawString(0,0,"LaCrosse2mqtt");
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("LaCrosse2mqtt");
+    display.println("Starting...");
     display.display();
+    delay(2000);
 
     last_switch = millis();
 
     if (!SX.init()) {
         Serial.println("***** SX127x init failed! ****");
-        display.drawString(0,24, "***** SX127x init failed! ****");
+        display.println("***** SX127x init failed! ****");
         display.display();
         while(true)
             delay(1000);
