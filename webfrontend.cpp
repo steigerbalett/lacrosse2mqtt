@@ -561,7 +561,7 @@ void handle_config() {
             "\"><button type=\"submit\">Switch to default " + (config.display_on ? off : on) + "</button>"
 #endif
             "<table><tr>"
-            "<td>Display is default</td>"
+            "<td>Display always on</td>"
             "<td><input type=\"radio\" id=\"d_on\" name=\"display\" value=\"1\" " + (config.display_on?checked:String()) + "/>"
             "<label for=\"d_on\">on</label></td>"
             "<td><input type=\"radio\" id=\"d_off\" name=\"display\" value=\"0\"" + (config.display_on?String():checked) + "/>"
