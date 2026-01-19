@@ -6,11 +6,11 @@
 #include <ArduinoJson.h>
 #include <rom/rtc.h>
 #include "WiFi.h"
-#include <SSD1306Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
-extern bool display_on;
 extern uint32_t auto_display_on;
-extern SSD1306Wire display;
+extern Adafruit_SSD1306 display; 
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
@@ -44,7 +44,7 @@ String time_string(void)
     if (now >= 24*60*60)
         ret += String(now / (24*60*60)) + "d ";
     now %= 24*60*60;
-    snprintf(timestr, 10, "%02d:%02d:%02d", now / (60*60), (now % (60*60)) / 60, now % 60);
+    snprintf(timestr, 10, "%02lu:%02lu:%02lu", now / (60*60), (now % (60*60)) / 60, now % 60);
     ret += String(timestr);
     return ret;
 }
@@ -98,7 +98,7 @@ bool load_config()
     if (!littlefs_ok)
         return false;
     File cfg = LittleFS.open("/config.json");
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, cfg);
     if (error) {
         Serial.println("Failed to read /config.json");
@@ -119,9 +119,9 @@ bool load_config()
             const char *tmp = doc["mqtt_pass"];
             config.mqtt_pass = String(tmp);
         }
-        if (doc.containsKey("display_on"))
+        if (!doc["display_on"].isNull())
             config.display_on = doc["display_on"];
-        if (doc.containsKey("ha_discovery"))
+        if (!doc["ha_discovery"].isNull())
             config.ha_discovery = doc["ha_discovery"];
         Serial.println("result of config.json: "
                        "mqtt_server '" + config.mqtt_server + "' "
@@ -149,7 +149,7 @@ bool save_config()
         Serial.println("Failed to open /config.json for writing");
         return false;
     }
-    StaticJsonDocument<256> doc;
+    JsonDocument doc;
     doc["mqtt_port"] = config.mqtt_port;
     doc["mqtt_server"] = config.mqtt_server;
     doc["mqtt_user"] = config.mqtt_user;
@@ -252,45 +252,23 @@ void add_current_table(String &s, bool rawdata)
         LaCrosse::Frame f;
         bool stale = false;
         
-        bool isChannel2 = (i >= 64 && i < 128);  // IDs 64-127 sind Kanal 2
-        byte baseID = isChannel2 ? (i - 64) : i;
+        // KORRIGIERTE Kanal-Erkennung:
+        // Entferne Rate-Bits (Bit 6 und 7) um Base-ID zu bekommen
+        byte baseID = i & 0x3F;  // Maske 0x3F = 0b00111111 (untere 6 Bits)
+        bool isChannel2 = false;
         
-        String name = id2name[baseID];
-        
+        // Prüfe ob fcache für diese ID Daten hat
         if (fcache[i].timestamp == 0) {
-            if (name.length() > 0 && !isChannel2) {
+            // Keine Daten, aber zeige wenn Name konfiguriert
+            String name = id2name[baseID];
+            if (name.length() > 0 && (i < 64)) {  // Nur base IDs anzeigen
                 stale = true;
             } else {
                 continue;
             }
         }
         
-        String displayName = name;
-        if (isChannel2 && name.length() > 0) {
-            displayName += " (Ch2)";
-        } else if (isChannel2 && name.length() == 0) {
-            displayName = "Unknown Ch2";
-        } else if (name.length() == 0) {
-            displayName = "";
-        }
-        
-        if (stale) {
-            s += "<tr class=\"stale\">"
-                 "<td>" + String(i) + "</td>"
-                 "<td>" + String(isChannel2 ? 2 : 1) + "</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>" + name + "</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>-</td>";
-            if (rawdata)
-                s += "<td>-</td>";
-            s += "</tr>\n";
-            continue;
-        }
-        
+        // Setze Rate basierend auf ID-Bits
         if (i & 0x80) {
             f.rate = 9579;
         } else if ((i & 0x40)) {
@@ -299,8 +277,40 @@ void add_current_table(String &s, bool rawdata)
             f.rate = 17241;
         }
         
-        if (! LaCrosse::TryHandleData(fcache[i].data, &f))
+        if (!stale && !LaCrosse::TryHandleData(fcache[i].data, &f))
             continue;
+
+        // NEU: Erkenne Kanal basierend auf Humidity
+        // Wenn humi ungültig (-1 oder > 100), ist es Kanal 2
+        if (!stale && (f.humi < 0 || f.humi > 100)) {
+            isChannel2 = true;
+        }
+        
+        String name = id2name[baseID];
+        String displayName = name;
+        
+        if (isChannel2 && name.length() > 0) {
+            displayName += " (Ch2)";
+        } else if (name.length() == 0) {
+            displayName = "";
+        }
+        
+        if (stale) {
+            s += "<tr class=\"stale\">"
+                 "<td>" + String(i) + "</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>" + displayName + "</td>"
+                 "<td>-</td>"
+                 "<td>-</td>"
+                 "<td>-</td>";
+            if (rawdata)
+                s += "<td>-</td>";
+            s += "</tr>\n";
+            continue;
+        }
 
         h = (f.humi > 0 && f.humi <= 100) ? String(f.humi) + "%" : "-";
         
@@ -313,13 +323,13 @@ void add_current_table(String &s, bool rawdata)
              "<td>" + String(f.temp, 1) + "°C</td>"
              "<td>" + h + "</td>"
              "<td>" + String(fcache[i].rssi) + "</td>"
-             "<td>" + name + "</td>"
+             "<td>" + displayName + "</td>"
              "<td>" + String(now - fcache[i].timestamp) + "</td>"
              "<td>" + battText + "</td>"
              "<td>" + initText + "</td>";
 
         if (rawdata) {
-            s += "<td>0x";
+            s += "<td class=\"rawdata\">0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
                 char tmp[3];
                 snprintf(tmp, 3, "%02X", fcache[i].data[j]);
@@ -494,15 +504,14 @@ void handle_config() {
         if (tmp != config.display_on) {
             config_changed = true;
             config.display_on = tmp;
-            display_on = tmp;
         
-            if (!display_on) {
-                display.displayOff();
+            if (!config.display_on) {
+                display.ssd1306_command(SSD1306_DISPLAYOFF);
             } else {
-                display.displayOn();
+                display.ssd1306_command(SSD1306_DISPLAYON);
                 auto_display_on = uptime_sec();
             }
-    }
+        }
     }
     if (server.hasArg("ha_disc")) {
         String _on = server.arg("ha_disc");

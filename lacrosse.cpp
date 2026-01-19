@@ -41,12 +41,17 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     f->batlo = (bytes[3] & 0x80) ? 1 : 0;
     f->humi  = bytes[3] & 0x7f;
     
-    // Temp 2 (magic value 0x7d = 125)
-    if (f->humi == 0x7d) {
+    // Kanal 2 Erkennung - verschiedene Sensoren verwenden verschiedene Magic Values:
+    // - TX29-IT: 0x7d (125 dezimal)
+    // - TX25-TH: 0x6A (106 dezimal)
+    // Generell: Werte > 100 sind ungültige Luftfeuchtigkeit → Kanal 2
+    if (f->humi == 106 || f->humi == 0x7d || f->humi > 100) {
+        // ENTFERNT: Debug-Ausgaben
         f->ID += 64;        // ID um 64 erhöhen für Kanal 2
         f->humi = -1;       // Keine gültige Luftfeuchtigkeit für Kanal 2
     }
     
+    // Rate-basierte ID-Offsets NACH Kanal-2-Erkennung
     if (f->rate == 9579)    // slow rate sensors => increase ID by 128
         f->ID |= 0x80;
     if (f->rate == 8842)

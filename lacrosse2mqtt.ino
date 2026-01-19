@@ -35,7 +35,7 @@
  * or a wifi change event */
 #define DISPLAY_TIMEOUT 300
 
-bool DEBUG = 0;
+bool DEBUG_MODE = 0;
 const int interval = 20;   /* toggle interval in seconds */
 const int freq = 868290;   /* frequency in kHz, 868300 did not receive all sensors... */
 
@@ -44,7 +44,7 @@ unsigned long last_switch = 0;
 // unsigned long last_display = 0;
 bool littlefs_ok;
 bool mqtt_ok;
-bool display_on = true;
+// bool display_on = true;
 uint32_t auto_display_on = 0;
 
 Config config;
@@ -210,7 +210,7 @@ void pub_hass_config(int what, byte ID)
             "},"
             "\"origin\":{"
                 "\"name\":\"lacrosse2mqtt\","
-                "\"url\":\"https://github.com/steigerbalett/lacrosse2mqtt\""
+                "\"url\":\"https://github.com/steigerbalett/lacrosse2mqtt\","
                 "\"sw_version\":\"v2026\""
             "},"
             "\"state_class\":\"measurement\","
@@ -250,8 +250,6 @@ void update_display(LaCrosse::Frame *frame)
     uint32_t now = uptime_sec();
     
     if (config.display_on) {
-        // ALT: display.displayOn();
-        // NEU:
         display.ssd1306_command(SSD1306_DISPLAYON);
     } else {
         if (now < auto_display_on + DISPLAY_TIMEOUT) {
@@ -262,7 +260,7 @@ void update_display(LaCrosse::Frame *frame)
         }
     }
     
-    bool show_wifi = (now / 60) & 0x01;
+    bool show_wifi = (uptime_sec() % 70) < 10;
     
     display.clearDisplay();
     display.setTextSize(1);
@@ -271,14 +269,13 @@ void update_display(LaCrosse::Frame *frame)
     
     if (show_wifi) {
         display.println("WiFi Status:");
+        display.println("****************************");        
         display.println("SSID: " + WiFi.SSID());
         display.println("IP: " + WiFi.localIP().toString());
         display.setCursor(0, 54);
         display.println("MQTT: " + String(mqtt_ok ? "OK" : "---"));
         display.display();
     } else {
-        display.println("Sensor Data:");
-        
         if (frame && frame->valid) {
             if (id2name[frame->ID].length() > 0) {
                 display.println(id2name[frame->ID]);
@@ -304,11 +301,10 @@ void update_display(LaCrosse::Frame *frame)
             display.setCursor(0, 54);
             display.println(rawHex);
             display.display();
-        } else {
-            draw_starfield();
         }
     }
 }
+
 
 void receive()
 {
@@ -323,7 +319,7 @@ void receive()
     rate = SX.GetDataRate();
     payload = SX.GetPayloadPointer();
 
-    if (DEBUG) {
+    if (DEBUG_MODE) {
         Serial.print("\nEnd receiving, HEX raw data: ");
         for (int i = 0; i < 16; i++) {
             Serial.print(payload[i], HEX);
@@ -411,7 +407,7 @@ void setup(void)
     Serial.begin(115200);
 
     WiFiManager wifiManager;
-    if (!wifiManager.autoConnect("HeltecLaCrosseAP")) {
+    if (!wifiManager.autoConnect("Lacrosse2mqttAP")) {
       Serial.println("Failed to connect and hit timeout");
       ESP.restart();
       delay(1000);
@@ -427,7 +423,6 @@ void setup(void)
     if (!littlefs_ok)
         Serial.println("LittleFS Mount Failed");
     setup_web(); /* also loads config from LittleFS */
-    display_on = config.display_on;
 
     pinMode(KEY_BUILTIN, INPUT);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -514,6 +509,9 @@ uint32_t check_button()
 static int last_state = -1;
 void loop(void)
 {
+    static unsigned long last_starfield_update = 0;
+    static bool showing_starfield = false;  // NEU: Track Starfield-Status
+    
     handle_client();
 
     uint32_t button_time = check_button();
@@ -523,19 +521,60 @@ void loop(void)
     }
     
     if (button_time > 100 && button_time <= 2000) {
-        display_on = ! display_on;
-        /* ensure that display can be turned off while timeout is still active */
-        auto_display_on = uptime_sec() - DISPLAY_TIMEOUT - 1;
+        if (!config.display_on) {
+            auto_display_on = uptime_sec();
+            Serial.println("Display reactivated for 5 minutes");
+        } else {
+            Serial.println("Display always on (change in webfrontend)");
+        }
+        showing_starfield = false;  // NEU: Reset bei Button-Press
         update_display(NULL);
     }
 
     receive();
     check_repeatedjobs();
     expire_cache();
+    
     if (last_state != wifi_state) {
         last_state = wifi_state;
         wifi_disp = String(_wifi_state_str[wifi_state]);
         auto_display_on = uptime_sec();
+        showing_starfield = false;  // NEU: Reset bei WiFi-Change
         update_display(NULL);
+    }
+    
+    unsigned long now = millis();
+    uint32_t uptime = uptime_sec();
+    
+    bool display_should_be_on = config.display_on || (uptime < auto_display_on + DISPLAY_TIMEOUT);
+    
+    if (display_should_be_on) {
+        bool show_wifi = (uptime % 70) < 10;
+        
+        if (!show_wifi) {
+            bool has_recent_data = false;
+            for (int i = 0; i < SENSOR_NUM; i++) {
+                if (fcache[i].timestamp > 0 && (now - fcache[i].timestamp) < 300000) {
+                    has_recent_data = true;
+                    break;
+                }
+            }
+            
+            if (!has_recent_data && (now - last_starfield_update > 50)) {
+                last_starfield_update = now;
+                showing_starfield = true;
+                draw_starfield();  // Direkt aufrufen für Animation
+            } else if (has_recent_data && showing_starfield) {
+                showing_starfield = false;
+                update_display(NULL);
+            }
+        } else {
+            if (showing_starfield) {
+                showing_starfield = false;
+                update_display(NULL);  // Wechsel zu WiFi-Info
+            }
+        }
+    } else {
+        showing_starfield = false;  // Display ist aus
     }
 }

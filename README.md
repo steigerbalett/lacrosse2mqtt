@@ -8,7 +8,7 @@ It is designed to run on a "TTGO LORA" board which has a SX1276 RF chip and a SS
 The on-board button triggers WPS connection to the WIFI network, it should be only needed on first installation.
 
 The web page is showing the received sensors with their values, the configuration page allows to specify a name / label for every sensor ID.
-The sensor ID is a 6 bit value (0-63). Because there are two different data rates for LaCrosse sensors, which can otherwise have the same ID, I decided to add 128 to the sensor ID if it comes from a sensor with the slow data rate. There are also two-channel temperature sensors which identify the second temperature channel with a "magic" humidity value. To distinguish the two channels, 64 is added to the sensor ID for the second channel. This gives a total of 256 sensor IDs.
+The sensor ID is a 6 bit value (0-63). Because there are three different data rates for LaCrosse sensors, which can otherwise have the same ID, I decided to add 128 to the sensor ID if it comes from a sensor with the slow data rate. There are also two-channel temperature sensors which identify the second temperature channel with a "magic" humidity value. To distinguish the two channels, 64 is added to the sensor ID for the second channel. This gives a total of 256 sensor IDs.
 To clear a label for a sensor, just enter an empty label.
 
 ## MQTT publishing of values
@@ -24,15 +24,15 @@ The software update can be uploaded via the "Update software" link from the conf
 
 ## Debugging
 More information about the current state is printed to the serial console, configured at 115200 baud.
-You can also define `DEBUG_DAVFS` in the code, then WebDAV access to the LITTLEFS used for storing the configuration is possible on port 81.
 
 ## Dependencies / credits
-The following libraries are needed for building (installed via arduino lib manager if no github url is given):
+The following libraries are needed for building (could all be installed via arduino lib manager, github url only for reference):
 
-   * LittleFS_esp32
-   * PubSubClient
-   * ESP8266 and ESP32 OLED driver for SSD1306 displays
-   * ArduinoJson
-   * Adafruit SSD1306
-   * ...
+   * [LittleFS_esp32](https://github.com/lorol/LITTLEFS)
+   * [PubSubClient](http://pubsubclient.knolleary.net/)
+   * [ArduinoJson](https://arduinojson.org/?utm_source=meta&utm_medium=library.properties)
+   * [Adafruit SSD1306](https://github.com/adafruit/Adafruit_SSD1306)
+   * [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library)
+   * [WiFiManager](https://github.com/tzapu/WiFiManager)
 
+   * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
