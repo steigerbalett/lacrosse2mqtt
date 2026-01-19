@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <rom/rtc.h>
 #include "WiFi.h"
+#include <SSD1306Wire.h>
 
 extern bool display_on;
 extern uint32_t auto_display_on;
