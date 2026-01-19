@@ -7,6 +7,10 @@
 #include <rom/rtc.h>
 #include "WiFi.h"
 
+extern bool display_on;
+extern uint32_t auto_display_on;
+extern SSD1306Wire display;
+
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
 #define LACROSSE2MQTT_VERSION  "DEV260119"
