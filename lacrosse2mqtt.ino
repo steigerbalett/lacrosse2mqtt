@@ -317,7 +317,7 @@ void receive()
                 if (abs(oldframe.temp2 - frame.temp2) > 2.0)
                     Serial.println(String("skipping invalid temp2 diff bigger than 2K: ") + String(oldframe.temp2 - frame.temp2,1));
                 else {
-                    pub_hass_config(2, ID);  // Index 2 für temp2
+                    pub_hass_config(2, ID);
                     mqtt_client.publish((pub + "temp2").c_str(), String(frame.temp2, 1).c_str());
                 }
             }
