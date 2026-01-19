@@ -49,9 +49,14 @@ static const uint8_t LED_BUILTIN = 2;
 #define HASS_CFG_TEMP2 (1 << 2)
 
 struct Cache {
-    unsigned long timestamp;
-    uint8_t data[FRAME_LENGTH];
+    byte data[FRAME_LENGTH];
+    uint32_t timestamp;
     int8_t rssi;
+    float temp;
+    int8_t humi;
+    bool batlo;
+    bool init;
+    bool valid;
 };
 
 struct Config {

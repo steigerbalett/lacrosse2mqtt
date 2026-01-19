@@ -276,31 +276,113 @@ void update_display(LaCrosse::Frame *frame)
         display.println("MQTT: " + String(mqtt_ok ? "OK" : "---"));
         display.display();
     } else {
-        if (frame && frame->valid) {
-            if (id2name[frame->ID].length() > 0) {
-                display.println(id2name[frame->ID]);
+    // Sammle alle aktiven Sensoren (gruppiert nach Base-ID)
+    struct SensorDisplay {
+        byte baseID;
+        bool has_ch1;
+        bool has_ch2;
+        unsigned long newest_time;
+    };
+    
+    SensorDisplay sensors[64];
+    //int sensor_count = 0;
+    
+    // Initialisiere
+    for (int i = 0; i < 64; i++) {
+        sensors[i].baseID = i;
+        sensors[i].has_ch1 = false;
+        sensors[i].has_ch2 = false;
+        sensors[i].newest_time = 0;
+    }
+    
+    // Scanne alle IDs und gruppiere nach Base-ID
+    for (int id = 0; id < SENSOR_NUM; id++) {
+        if (fcache[id].timestamp > 0 && fcache[id].valid) {
+            byte baseID = id >= 64 ? (id - 64) : id;
+            
+            if (id < 64) {
+                sensors[baseID].has_ch1 = true;
             } else {
-                display.println("ID: " + String(frame->ID));
+                sensors[baseID].has_ch2 = true;
             }
             
+            if (fcache[id].timestamp > sensors[baseID].newest_time) {
+                sensors[baseID].newest_time = fcache[id].timestamp;
+            }
+        }
+    }
+    
+    // Finde neuesten aktiven Sensor
+    byte displayBaseID = 0;
+    unsigned long newestTime = 0;
+    
+    for (int i = 0; i < 64; i++) {
+        if ((sensors[i].has_ch1 || sensors[i].has_ch2) && sensors[i].newest_time > newestTime) {
+            newestTime = sensors[i].newest_time;
+            displayBaseID = i;
+        }
+    }
+    
+    // Zeige Sensor an
+    if (newestTime > 0) {
+        // Sensor-Name
+        if (id2name[displayBaseID].length() > 0) {
+            display.println(id2name[displayBaseID]);
+        } else {
+            display.println("ID: " + String(displayBaseID));
+        }
+        display.println("---------------------");
+        
+        int line_count = 2;
+        
+        // Kanal 1 (wenn vorhanden)
+        if (sensors[displayBaseID].has_ch1) {
             char tempBuf[24];
-            snprintf(tempBuf, sizeof(tempBuf), "Temp: %.1f C", frame->temp);
-            display.println(tempBuf);
+            snprintf(tempBuf, sizeof(tempBuf), "Temp: %.1fC", fcache[displayBaseID].temp);
+            display.print(tempBuf);
             
-            if (frame->humi > 0 && frame->humi <= 100) {
-                snprintf(tempBuf, sizeof(tempBuf), "Humi: %d %%", frame->humi);
+            if (fcache[displayBaseID].humi > 0 && fcache[displayBaseID].humi <= 100) {
+                snprintf(tempBuf, sizeof(tempBuf), " H:%d%%", fcache[displayBaseID].humi);
                 display.println(tempBuf);
+            } else {
+                display.println();
             }
-            
-            String rawHex = "RAW: ";
-            for (int i = 0; i < 5 && i < FRAME_LENGTH; i++) {
-                if (fcache[frame->ID].data[i] < 16) rawHex += "0";
-                rawHex += String(fcache[frame->ID].data[i], HEX);
-                if (i < 4) rawHex += " ";
-            }
-            display.setCursor(0, 54);
-            display.println(rawHex);
-            display.display();
+            line_count++;
+        }
+        
+        // Kanal 2 (wenn vorhanden)
+        if (sensors[displayBaseID].has_ch2) {
+            char tempBuf[24];
+            snprintf(tempBuf, sizeof(tempBuf), "Temp2: %.1fC", fcache[displayBaseID + 64].temp);
+            display.println(tempBuf);
+            line_count++;
+        }
+        
+        // Batterie-Status (vom neuesten Kanal)
+        byte statusID = displayBaseID;
+        if (sensors[displayBaseID].has_ch2 && 
+            fcache[displayBaseID + 64].timestamp > fcache[displayBaseID].timestamp) {
+            statusID = displayBaseID + 64;
+        }
+        
+        if (fcache[statusID].batlo) {
+            display.println("BAT: WEAK!");
+            line_count++;
+        }
+        
+        // RAW Daten
+        String rawHex = "RAW: ";
+        for (int i = 0; i < 5 && i < FRAME_LENGTH; i++) {
+            if (fcache[statusID].data[i] < 16) rawHex += "0";
+            rawHex += String(fcache[statusID].data[i], HEX);
+            if (i < 4) rawHex += " ";
+        }
+        display.setCursor(0, 54);
+        display.println(rawHex);
+        display.display();
+    } else {
+        display.println("Warte auf Daten...");
+        display.display();
         }
     }
 }
@@ -331,61 +413,65 @@ void receive()
     LaCrosse::Frame frame;
     frame.rate = rate;
     if (LaCrosse::TryHandleData(payload, &frame)) {
-        byte ID = frame.ID;
+    byte ID = frame.ID;  // ID ist bereits korrekt (+64 für Ch2)
         
-        // Erkenne Kanal 2 (ID wurde in TryHandleData um 64 erhöht)
-        bool isChannel2 = (ID >= 64);
-        byte baseID = isChannel2 ? (ID - 64) : ID;
+    LaCrosse::Frame oldframe;
+    LaCrosse::TryHandleData(fcache[ID].data, &oldframe);
+    fcache[ID].rssi = rssi;
+    fcache[ID].timestamp = millis();
+    memcpy(&fcache[ID].data, payload, FRAME_LENGTH);
+    fcache[ID].temp = frame.temp;
+    fcache[ID].humi = frame.humi;
+    fcache[ID].batlo = frame.batlo;
+    fcache[ID].init = frame.init;
+    fcache[ID].valid = frame.valid;
+    frame.rssi = rssi;
+    LaCrosse::DisplayFrame(payload, &frame);
+    
+    String pub = pub_base + String(ID, DEC) + "/";
+    mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+    
+    if (frame.humi > 0 && frame.humi <= 100)
+        mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+    
+    // Kanal-Erkennung für MQTT state
+    bool isChannel2 = (ID >= 64);
+    byte baseID = isChannel2 ? (ID - 64) : ID;
+    
+    String state = ""
+        "{\"low_batt\": " + String(frame.batlo?"true":"false") +
+         ", \"init\": " + String(frame.init?"true":"false") +
+         ", \"RSSI\": " + String(rssi, DEC) +
+         ", \"baud\": " + String(frame.rate / 1000.0, 3) +
+         ", \"channel\": " + String(isChannel2 ? 2 : 1) +
+         "}";
+    mqtt_client.publish((pub + "state").c_str(), state.c_str());
+    
+    // Pretty names
+    if (id2name[baseID].length() > 0) {
+        String sensorName = id2name[baseID];
+        if (isChannel2) {
+            sensorName += "_Ch2";
+        }
         
-        LaCrosse::Frame oldframe;
-        LaCrosse::TryHandleData(fcache[ID].data, &oldframe);
-        fcache[ID].rssi = rssi;
-        fcache[ID].timestamp = millis();
-        memcpy(&fcache[ID].data, payload, FRAME_LENGTH);
-        frame.rssi = rssi;
-        LaCrosse::DisplayFrame(payload, &frame);
+        pub = pretty_base + sensorName + "/";
         
-        // MQTT: Publiziere mit tatsächlicher ID (inkl. Kanal-Offset)
-        String pub = pub_base + String(ID, DEC) + "/";
-        mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+        if (abs(oldframe.temp - frame.temp) > 2.0)
+            Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp,1));
+        else {
+            pub_hass_config(1, baseID);  // WICHTIG: Nutze baseID für Config!
+            mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+        }
         
-        if (frame.humi > 0 && frame.humi <= 100)
-            mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
-        
-        String state = "";
-        state += "{\"low_batt\": " + String(frame.batlo?"true":"false") +
-                 ", \"init\": " + String(frame.init?"true":"false") +
-                 ", \"RSSI\": " + String(rssi, DEC) +
-                 ", \"baud\": " + String(rate / 1000.0, 3) +
-                 ", \"channel\": " + String(isChannel2 ? 2 : 1) +
-                 "}";
-        mqtt_client.publish((pub + "state").c_str(), state.c_str());
-        
-        // Pretty names mit Kanal-Erkennung
-        if (id2name[baseID].length() > 0) {
-            String sensorName = id2name[baseID];
-            if (isChannel2) {
-                sensorName += "_Ch2";  // z.B. "Wohnzimmer_Ch2"
-            }
-            
-            pub = pretty_base + sensorName + "/";
-            
-            if (abs(oldframe.temp - frame.temp) > 2.0)
-                Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp,1));
+        if (frame.humi > 0 && frame.humi <= 100) {
+            if (abs(oldframe.humi - frame.humi) > 10)
+                Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
             else {
-                pub_hass_config(1, ID);  // Nutze die tatsächliche ID (mit Offset)
-                mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
-            }
-            
-            if (frame.humi > 0 && frame.humi <= 100) {
-                if (abs(oldframe.humi - frame.humi) > 10)
-                    Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
-                else {
-                    pub_hass_config(0, ID);
-                    mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
-                }
+                pub_hass_config(0, baseID);  // WICHTIG: Nutze baseID für Config!
+                mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
             }
         }
+    }
 
     } else {
         static unsigned long last;

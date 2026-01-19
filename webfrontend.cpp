@@ -236,109 +236,64 @@ void add_current_table(String &s, bool rawdata)
     s += "<table class=\"sensors\">\n";
     s += "<thead><tr>"
          "<th>ID</th>"
-         "<th>Channel</th>"
          "<th>Temperature</th>"
          "<th>Humidity</th>"
          "<th>RSSI</th>"
          "<th>Name</th>"
          "<th>Age (ms)</th>"
-         "<th>Battery status</th>"
-         "<th>New battery</th>";
+         "<th>Battery</th>"
+         "<th>New Batt</th>";
     if (rawdata)
         s += "<th>Raw Frame Data</th>";
     s += "</tr></thead>\n<tbody>\n";
 
-    for (int i = 0; i < SENSOR_NUM; i++) {
-        LaCrosse::Frame f;
-        bool stale = false;
-        
-        // KORRIGIERTE Kanal-Erkennung:
-        // Entferne Rate-Bits (Bit 6 und 7) um Base-ID zu bekommen
-        byte baseID = i & 0x3F;  // Maske 0x3F = 0b00111111 (untere 6 Bits)
-        bool isChannel2 = false;
-        
-        // Prüfe ob fcache für diese ID Daten hat
-        if (fcache[i].timestamp == 0) {
-            // Keine Daten, aber zeige wenn Name konfiguriert
-            String name = id2name[baseID];
-            if (name.length() > 0 && (i < 64)) {  // Nur base IDs anzeigen
-                stale = true;
-            } else {
-                continue;
-            }
-        }
-        
-        // Setze Rate basierend auf ID-Bits
-        if (i & 0x80) {
-            f.rate = 9579;
-        } else if ((i & 0x40)) {
-            f.rate = 8842;
-        } else {
-            f.rate = 17241;
-        }
-        
-        if (!stale && !LaCrosse::TryHandleData(fcache[i].data, &f))
+    // Zeige ALLE aktiven IDs einzeln an
+    for (int id = 0; id < SENSOR_NUM; id++) {
+        if (fcache[id].timestamp == 0 || !fcache[id].valid)
             continue;
-
-        // NEU: Erkenne Kanal basierend auf Humidity
-        // Wenn humi ungültig (-1 oder > 100), ist es Kanal 2
-        if (!stale && (f.humi < 0 || f.humi > 100)) {
-            isChannel2 = true;
-        }
         
+        byte baseID = id >= 64 ? (id - 64) : id;
+        bool isChannel2 = (id >= 64);
+        
+        // Name
         String name = id2name[baseID];
-        String displayName = name;
+        if (name.length() == 0)
+            name = "-";
+        if (isChannel2)
+            name += " (Ch2)";
         
-        if (isChannel2 && name.length() > 0) {
-            displayName += " (Ch2)";
-        } else if (name.length() == 0) {
-            displayName = "";
+        s += "<tr>";
+        s += "<td>" + String(id) + "</td>";
+        s += "<td>" + String(fcache[id].temp, 1) + "°C</td>";
+        
+        // Humidity
+        if (fcache[id].humi > 0 && fcache[id].humi <= 100) {
+            s += "<td>" + String(fcache[id].humi) + "%</td>";
+        } else {
+            s += "<td>-</td>";
         }
         
-        if (stale) {
-            s += "<tr class=\"stale\">"
-                 "<td>" + String(i) + "</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>" + displayName + "</td>"
-                 "<td>-</td>"
-                 "<td>-</td>"
-                 "<td>-</td>";
-            if (rawdata)
-                s += "<td>-</td>";
-            s += "</tr>\n";
-            continue;
-        }
-
-        h = (f.humi > 0 && f.humi <= 100) ? String(f.humi) + "%" : "-";
+        s += "<td>" + String(fcache[id].rssi) + "</td>";
+        s += "<td>" + name + "</td>";
+        s += "<td>" + String(now - fcache[id].timestamp) + "</td>";
         
-        String battText = f.batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
-        String initText = f.init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
-
-        s += "<tr>"
-             "<td>" + String(i) + "</td>"
-             "<td>" + String(isChannel2 ? 2 : 1) + "</td>"
-             "<td>" + String(f.temp, 1) + "°C</td>"
-             "<td>" + h + "</td>"
-             "<td>" + String(fcache[i].rssi) + "</td>"
-             "<td>" + displayName + "</td>"
-             "<td>" + String(now - fcache[i].timestamp) + "</td>"
-             "<td>" + battText + "</td>"
-             "<td>" + initText + "</td>";
-
+        String battText = fcache[id].batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
+        String initText = fcache[id].init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
+        s += "<td>" + battText + "</td>";
+        s += "<td>" + initText + "</td>";
+        
         if (rawdata) {
             s += "<td class=\"rawdata\">0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
                 char tmp[3];
-                snprintf(tmp, 3, "%02X", fcache[i].data[j]);
+                snprintf(tmp, 3, "%02X", fcache[id].data[j]);
                 s += String(tmp);
             }
             s += "</td>";
         }
         s += "</tr>\n";
     }
+    
     s += "</tbody></table>\n";
 }
 
