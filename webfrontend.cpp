@@ -224,9 +224,6 @@ bool save_idmap()
     return true;
 }
 
-Hier ist die geänderte add_current_table() Funktion in webfrontend.cpp mit Kanal-Erkennung:
-
-cpp
 void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
@@ -234,7 +231,7 @@ void add_current_table(String &s, bool rawdata)
     s += "<table class=\"sensors\">\n";
     s += "<thead><tr>"
          "<th>ID</th>"
-         "<th>Channel</th>"  // NEU: Kanal-Spalte
+         "<th>Channel</th>"
          "<th>Temperature</th>"
          "<th>Humidity</th>"
          "<th>RSSI</th>"
@@ -250,10 +247,9 @@ void add_current_table(String &s, bool rawdata)
         LaCrosse::Frame f;
         bool stale = false;
         
-        // NEU: Kanal-Erkennung
         bool isChannel2 = (i >= 64);
         byte baseID = isChannel2 ? (i - 64) : i;
-        String name = id2name[baseID];  // Name aus baseID holen
+        String name = id2name[baseID];
         
         if (fcache[i].timestamp == 0) {
             if (name.length() > 0)
@@ -262,7 +258,6 @@ void add_current_table(String &s, bool rawdata)
                 continue;
         }
         
-        // NEU: Kanal-Suffix zum Namen hinzufügen
         if (isChannel2 && name.length() > 0) {
             name += " (Ch2)";
         }
@@ -270,7 +265,7 @@ void add_current_table(String &s, bool rawdata)
         if (stale) {
             s += "<tr class=\"stale\">"
                  "<td>" + String(i) + "</td>"
-                 "<td>" + String(isChannel2 ? 2 : 1) + "</td>"  // NEU: Kanal
+                 "<td>" + String(isChannel2 ? 2 : 1) + "</td>"
                  "<td>-</td>"
                  "<td>-</td>"
                  "<td>-</td>"
@@ -302,7 +297,7 @@ void add_current_table(String &s, bool rawdata)
 
         s += "<tr>"
              "<td>" + String(i) + "</td>"
-             "<td>" + String(isChannel2 ? 2 : 1) + "</td>"  // NEU: Kanal
+             "<td>" + String(isChannel2 ? 2 : 1) + "</td>"
              "<td>" + String(f.temp, 1) + "°C</td>"
              "<td>" + h + "</td>"
              "<td>" + String(fcache[i].rssi) + "</td>"
