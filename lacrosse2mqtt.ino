@@ -218,7 +218,7 @@ void update_display(LaCrosse::Frame *frame)
         display.drawString(0, 0, "WiFi Status:");
         display.drawString(0, 14, "SSID: " + WiFi.SSID());
         display.drawString(0, 28, "IP: " + WiFi.localIP().toString());
-        display.drawString(0, 42, "Status: " + wifi_disp);
+        /* display.drawString(0, 42, "Status: " + wifi_disp); */
         display.drawString(0, 54, "MQTT: " + String(mqtt_ok ? "OK" : "---"));
     } else {
         display.drawString(0, 0, "Sensor Data:");
@@ -279,51 +279,58 @@ void receive()
         Serial.println();
     }
 
-    /* check if it can be decoded */
     LaCrosse::Frame frame;
     frame.rate = rate;
     if (LaCrosse::TryHandleData(payload, &frame)) {
-        LaCrosse::Frame oldframe;
         byte ID = frame.ID;
+        
+        // Erkenne Kanal 2 (ID wurde in TryHandleData um 64 erhöht)
+        bool isChannel2 = (ID >= 64);
+        byte baseID = isChannel2 ? (ID - 64) : ID;
+        
+        LaCrosse::Frame oldframe;
         LaCrosse::TryHandleData(fcache[ID].data, &oldframe);
         fcache[ID].rssi = rssi;
         fcache[ID].timestamp = millis();
         memcpy(&fcache[ID].data, payload, FRAME_LENGTH);
         frame.rssi = rssi;
         LaCrosse::DisplayFrame(payload, &frame);
+        
+        // MQTT: Publiziere mit tatsächlicher ID (inkl. Kanal-Offset)
         String pub = pub_base + String(ID, DEC) + "/";
         mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
-        if (frame.hasTemp2) {  
-            mqtt_client.publish((pub + "temp2").c_str(), String(frame.temp2, 1).c_str());
-        }        
-        if (frame.humi <= 100)
+        
+        if (frame.humi > 0 && frame.humi <= 100)
             mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+        
         String state = "";
         state += "{\"low_batt\": " + String(frame.batlo?"true":"false") +
                  ", \"init\": " + String(frame.init?"true":"false") +
                  ", \"RSSI\": " + String(rssi, DEC) +
                  ", \"baud\": " + String(rate / 1000.0, 3) +
+                 ", \"channel\": " + String(isChannel2 ? 2 : 1) +
                  "}";
         mqtt_client.publish((pub + "state").c_str(), state.c_str());
-        if (id2name[ID].length() > 0) {
-            pub = pretty_base + id2name[ID] + "/";
+        
+        // Pretty names mit Kanal-Erkennung
+        if (id2name[baseID].length() > 0) {
+            String sensorName = id2name[baseID];
+            if (isChannel2) {
+                sensorName += "_Ch2";  // z.B. "Wohnzimmer_Ch2"
+            }
+            
+            pub = pretty_base + sensorName + "/";
+            
             if (abs(oldframe.temp - frame.temp) > 2.0)
-                Serial.println(String("skipping invalid temp diff bigger than 2K: ") + String(oldframe.temp - frame.temp,1));
+                Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp,1));
             else {
-                pub_hass_config(1, ID);
+                pub_hass_config(1, ID);  // Nutze die tatsächliche ID (mit Offset)
                 mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
             }
-            if (frame.hasTemp2) {
-                if (abs(oldframe.temp2 - frame.temp2) > 2.0)
-                    Serial.println(String("skipping invalid temp2 diff bigger than 2K: ") + String(oldframe.temp2 - frame.temp2,1));
-                else {
-                    pub_hass_config(2, ID);
-                    mqtt_client.publish((pub + "temp2").c_str(), String(frame.temp2, 1).c_str());
-                }
-            }
-            if (frame.humi <= 100) {
+            
+            if (frame.humi > 0 && frame.humi <= 100) {
                 if (abs(oldframe.humi - frame.humi) > 10)
-                    Serial.println(String("skipping invalid humi diff > 10%: ") + String(oldframe.humi - frame.humi, DEC));
+                    Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
                 else {
                     pub_hass_config(0, ID);
                     mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());

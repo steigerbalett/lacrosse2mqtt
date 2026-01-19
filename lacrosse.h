@@ -7,17 +7,15 @@
 class LaCrosse {
 public:
     struct Frame {
-        uint8_t ID;          /* byte 1 */
-        int8_t  humi;        /* byte 2 */
-        int8_t  rssi;        /* byte 3 */
-        uint8_t init:1;      /* byte 4 */
-        uint8_t batlo:1;     /* ordering... */
-        uint8_t valid:1;     /* ..is important.. */
-        uint8_t pad:5;       /* ...for alignment */
-        float   temp;        /* byte 5-8 */
-        float   temp2;       /* byte 9-12 - Temp 2 */
-        bool    hasTemp2;    /* Flag: temp2 valid */
-        int     rate;        /* decoding rate info */
+        uint8_t ID;         /* byte 1 */
+        int8_t  humi;       /* byte 2 */
+        int8_t  rssi;       /* byte 3 */
+        uint8_t init:1;     /* byte 4 */
+        uint8_t batlo:1;    /* ordering... */
+        uint8_t valid:1;    /* ..is important.. */
+        uint8_t pad:5;      /* ...for alignment */
+        float   temp;       /* byte 5-8 */
+        int     rate;       /* byte 9-12 */
     };
     static void DecodeFrame(byte *bytes, struct Frame *frame);
     static bool DisplayFrame(byte *data, struct Frame *frame);

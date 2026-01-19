@@ -224,6 +224,9 @@ bool save_idmap()
     return true;
 }
 
+Hier ist die geänderte add_current_table() Funktion in webfrontend.cpp mit Kanal-Erkennung:
+
+cpp
 void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
@@ -231,8 +234,8 @@ void add_current_table(String &s, bool rawdata)
     s += "<table class=\"sensors\">\n";
     s += "<thead><tr>"
          "<th>ID</th>"
+         "<th>Channel</th>"  // NEU: Kanal-Spalte
          "<th>Temperature</th>"
-         "<th>Temp. 2</th>"
          "<th>Humidity</th>"
          "<th>RSSI</th>"
          "<th>Name</th>"
@@ -245,19 +248,29 @@ void add_current_table(String &s, bool rawdata)
 
     for (int i = 0; i < SENSOR_NUM; i++) {
         LaCrosse::Frame f;
-        f.temp2 = -99.9f;
         bool stale = false;
-        String name = id2name[i];
+        
+        // NEU: Kanal-Erkennung
+        bool isChannel2 = (i >= 64);
+        byte baseID = isChannel2 ? (i - 64) : i;
+        String name = id2name[baseID];  // Name aus baseID holen
+        
         if (fcache[i].timestamp == 0) {
             if (name.length() > 0)
                 stale = true;
             else
                 continue;
         }
+        
+        // NEU: Kanal-Suffix zum Namen hinzufügen
+        if (isChannel2 && name.length() > 0) {
+            name += " (Ch2)";
+        }
+        
         if (stale) {
             s += "<tr class=\"stale\">"
                  "<td>" + String(i) + "</td>"
-                 "<td>-</td>"
+                 "<td>" + String(isChannel2 ? 2 : 1) + "</td>"  // NEU: Kanal
                  "<td>-</td>"
                  "<td>-</td>"
                  "<td>-</td>"
@@ -270,6 +283,7 @@ void add_current_table(String &s, bool rawdata)
             s += "</tr>\n";
             continue;
         }
+        
         if (i & 0x80) {
             f.rate = 9579;
         } else if ((i & 0x40)) {
@@ -277,19 +291,19 @@ void add_current_table(String &s, bool rawdata)
         } else {
             f.rate = 17241;
         }
+        
         if (! LaCrosse::TryHandleData(fcache[i].data, &f))
             continue;
 
         h = (f.humi > 0 && f.humi <= 100) ? String(f.humi) + "%" : "-";
-        String temp2Str = (f.temp2 > -99) ? String(f.temp2, 1) + "°C" : "-";
-  
+        
         String battText = f.batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
         String initText = f.init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
 
         s += "<tr>"
              "<td>" + String(i) + "</td>"
-             "<td>" + String(f.temp, 1) + "</td>"
-             "<td>" + temp2Str + "</td>"
+             "<td>" + String(isChannel2 ? 2 : 1) + "</td>"  // NEU: Kanal
+             "<td>" + String(f.temp, 1) + "°C</td>"
              "<td>" + h + "</td>"
              "<td>" + String(fcache[i].rssi) + "</td>"
              "<td>" + name + "</td>"

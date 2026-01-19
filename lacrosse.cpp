@@ -15,7 +15,7 @@
 * `---- start byte
 *
 * more details:
-* https://github.com/merbanan/rtl_433/blob/master/src/devices/lacrosse_tx35.c
+* [https://github.com/merbanan/rtl_433/blob/master/src/devices/lacrosse_tx35.c](https://github.com/merbanan/rtl_433/blob/master/src/devices/lacrosse_tx35.c)
 */
 void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
 {
@@ -40,16 +40,17 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     f->temp  = ((bcd[0] * 100 + bcd[1] * 10 + bcd[2]) - 400) / 10.0;
     f->batlo = (bytes[3] & 0x80) ? 1 : 0;
     f->humi  = bytes[3] & 0x7f;
-    if (f->humi == 0x7d) /* indicates that temperature is second channel */
-        {
-        f->ID |= 0x40;   /* => increase ID by 64 to indicate difference  */
-        f->temp2 = f->temp;  /* define temp2 in struct Frame */
-        f->humi = 0;         /* no humidity for Channel 2 */
-        } 
-    else {
-        f->temp2 = -99.9;    // no temp
-        }
-    if (f->rate == 9579) /* slow rate sensors => increase ID by 128 */
+    
+    // recognice channel 2 (magic value 0x7d = 125)
+    if (f->humi == 0x7d) {
+        f->ID += 64;        // ID um 64 erhöhen für Kanal 2
+        f->humi = -1;       // Keine gültige Luftfeuchtigkeit für Kanal 2
+        f->hasTemp2 = false; // Kein temp2, temp ist die zweite Kanal-Temperatur
+    } else {
+        f->hasTemp2 = false; // Normale Sensoren haben kein temp2
+    }
+    
+    if (f->rate == 9579)    // slow rate sensors => increase ID by 128
         f->ID |= 0x80;
     if (f->rate == 8842)
         f->ID |= 0x40;
@@ -60,19 +61,20 @@ bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
     static unsigned long last[SENSOR_NUM]; /* one for each sensor ID */
 
     if (!f->valid) {
-        Serial.println("LaCrosse::DisplayFrame FRAME INVALD");
+        Serial.println("LaCrosse::DisplayFrame FRAME INVALID");
         return false;
     }
 
     DisplayRaw(last[f->ID], "Sensor ", data, FRAME_LENGTH, f->rssi, f->rate);
 
-    Serial.printf(" ID:%-3d Temp:%-5.1f", f->ID, f->temp);
-    if (f->temp2 > -99) {  // (TX25TP)
-        Serial.printf(" Temp2:%-5.1f", f->temp2);
-    }
+    Serial.printf(" ID:%-3d Temp:%-5.1f°C", f->ID, f->temp);
     Serial.printf(" init:%d batlo:%d", f->init, f->batlo);
+    
     if (f->humi > 0 && f->humi <= 100)
-        Serial.printf(" Hum:%d", f->humi);
+        Serial.printf(" Humi:%d%%", f->humi);
+    else if (f->humi == -1)
+        Serial.print(" (Channel 2, no humidity)");
+    
     Serial.println();
     return true;
 }
