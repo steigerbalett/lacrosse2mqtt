@@ -127,16 +127,16 @@ void check_repeatedjobs()
 
 void pub_hass_config(int what, byte ID)
 {
-    static const String name[2] = { "Luftfeuchtigkeit", "Temperatur" };
-    static const String value[2] = { "humi", "temp" };
-    static const String dclass[2] = { "humidity", "temperature" };
-    static const String unit[2] = { "%", "°C" };
+    static const String name[3] = { "Luftfeuchtigkeit", "Temperatur", "Temperatur 2" };
+    static const String value[3] = { "humi", "temp", "temp2" };
+    static const String dclass[3] = { "humidity", "temperature", "temperature" };
+    static const String unit[3] = { "%", "°C", "°C" };
     String where = id2name[ID];
 
     if (!config.ha_discovery)
         return;
     /* only send once */
-    if (hass_cfg[ID] & (1 << what))
+    if (hass_cfg[ID] & (1 << what)) /* what = 0 (humi), 1 (temp), 2 (temp2) */
         return;
     hass_cfg[ID] |= (1 << what);
 
@@ -294,6 +294,9 @@ void receive()
         LaCrosse::DisplayFrame(payload, &frame);
         String pub = pub_base + String(ID, DEC) + "/";
         mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+        if (frame.hasTemp2) {  
+            mqtt_client.publish((pub + "temp2").c_str(), String(frame.temp2, 1).c_str());
+        }        
         if (frame.humi <= 100)
             mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
         String state = "";
@@ -310,6 +313,14 @@ void receive()
             else {
                 pub_hass_config(1, ID);
                 mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+            }
+            if (frame.hasTemp2) {
+                if (abs(oldframe.temp2 - frame.temp2) > 2.0)
+                    Serial.println(String("skipping invalid temp2 diff bigger than 2K: ") + String(oldframe.temp2 - frame.temp2,1));
+                else {
+                    pub_hass_config(2, ID);  // Index 2 für temp2
+                    mqtt_client.publish((pub + "temp2").c_str(), String(frame.temp2, 1).c_str());
+                }
             }
             if (frame.humi <= 100) {
                 if (abs(oldframe.humi - frame.humi) > 10)

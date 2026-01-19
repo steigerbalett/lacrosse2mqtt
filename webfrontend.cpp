@@ -9,7 +9,7 @@
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "DEV260118"
+#define LACROSSE2MQTT_VERSION  "DEV260119"
 #endif
 
 static WebServer server(80);

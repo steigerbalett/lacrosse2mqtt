@@ -44,6 +44,10 @@ static const uint8_t LED_BUILTIN = 2;
 /* maximum number of sensors: 64 x 2 channels x 2 datarates */
 #define SENSOR_NUM 256
 
+#define HASS_CFG_HUMI  (1 << 0)
+#define HASS_CFG_TEMP  (1 << 1)
+#define HASS_CFG_TEMP2 (1 << 2)
+
 struct Cache {
     unsigned long timestamp;
     uint8_t data[FRAME_LENGTH];
@@ -63,6 +67,7 @@ struct Config {
 extern Config config;
 extern Cache fcache[];
 extern String id2name[SENSOR_NUM];
+extern uint8_t hass_cfg[SENSOR_NUM];
 extern bool littlefs_ok;
 extern bool mqtt_ok;
 
