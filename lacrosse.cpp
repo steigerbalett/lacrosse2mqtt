@@ -41,13 +41,10 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     f->batlo = (bytes[3] & 0x80) ? 1 : 0;
     f->humi  = bytes[3] & 0x7f;
     
-    // recognice channel 2 (magic value 0x7d = 125)
+    // Temp 2 (magic value 0x7d = 125)
     if (f->humi == 0x7d) {
         f->ID += 64;        // ID um 64 erhöhen für Kanal 2
         f->humi = -1;       // Keine gültige Luftfeuchtigkeit für Kanal 2
-        f->hasTemp2 = false; // Kein temp2, temp ist die zweite Kanal-Temperatur
-    } else {
-        f->hasTemp2 = false; // Normale Sensoren haben kein temp2
     }
     
     if (f->rate == 9579)    // slow rate sensors => increase ID by 128
