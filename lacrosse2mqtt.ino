@@ -23,24 +23,15 @@
 #include "wifi_functions.h"
 #include "webfrontend.h"
 #include "globals.h"
-
 #include "lacrosse.h"
 #include "SX127x.h"
-
 #include <WiFiManager.h>
-
-//#define DEBUG_DAVFS
 
 #define FORMAT_LITTLEFS_IF_FAILED false
 
 /* if display is default to off, keep it on for this many seconds after power on
  * or a wifi change event */
 #define DISPLAY_TIMEOUT 300
-
-#ifdef DEBUG_DAVFS
-WiFiServer tcp(81);
-ESPWebDAV dav;
-#endif
 
 bool DEBUG = 0;
 const int interval = 20;   /* toggle interval in seconds */
@@ -197,10 +188,12 @@ void update_display(LaCrosse::Frame *frame)
 {
     uint32_t now = uptime_sec();
     
-    // Display ein/aus Logik
-    if (display_on)
-        display.displayOn();
-    else if (now < auto_display_on + DISPLAY_TIMEOUT) {
+    if (!display_on) {
+        display.displayOff();
+        return;
+    }
+    
+    if (now < auto_display_on + DISPLAY_TIMEOUT) {
         display.displayOn();
     } else {
         display.displayOff();

@@ -479,9 +479,18 @@ void handle_config() {
     if (server.hasArg("display")) {
         String _on = server.arg("display");
         int tmp = _on.toInt();
-        if (tmp != config.display_on)
+        if (tmp != config.display_on) {
             config_changed = true;
-        config.display_on = tmp;
+            config.display_on = tmp;
+            display_on = tmp;
+        
+            if (!display_on) {
+                display.displayOff();
+            } else {
+                display.displayOn();
+                auto_display_on = uptime_sec();
+            }
+    }
     }
     if (server.hasArg("ha_disc")) {
         String _on = server.arg("ha_disc");
@@ -542,7 +551,7 @@ void handle_config() {
     resp += "<p></p>\n"
             "<form action=\"/config.html\">"
 #if 0
-            "Display is default <b>" + (config.display_on ? on : off) + "</b>."
+            "Display always on <b>" + (config.display_on ? on : off) + "</b>."
             "<input type=\"hidden\" name=\"display\" value=\"" + String(!config.display_on) +
             "\"><button type=\"submit\">Switch to default " + (config.display_on ? off : on) + "</button>"
 #endif
