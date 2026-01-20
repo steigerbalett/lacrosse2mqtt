@@ -460,23 +460,23 @@ static void add_header(String &s, const String &title)
         "body { "
             "font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; "
             "margin: 0; "
-            "padding: 20px; "
+            "padding: 12px; "
             "background-color: var(--primary-background-color); "
             "color: var(--primary-text-color); "
-            "line-height: 1.6; "
+            "line-height: 1.4; "
             "transition: background-color 0.3s, color 0.3s; "
         "}"
         ".header-container { "
             "display: flex; "
             "justify-content: space-between; "
             "align-items: center; "
-            "margin-bottom: 24px; "
-            "padding-bottom: 16px; "
+            "margin-bottom: 16px; "
+            "padding-bottom: 8px; "
             "border-bottom: 1px solid var(--divider-color); "
         "}"
         "h1 { "
             "color: var(--primary-text-color); "
-            "font-size: 32px; "
+            "font-size: 28px; "
             "font-weight: 400; "
             "margin: 0; "
         "}"
@@ -484,13 +484,13 @@ static void add_header(String &s, const String &title)
             "background-color: var(--card-background-color); "
             "border: 1px solid var(--divider-color); "
             "border-radius: 24px; "
-            "padding: 8px 16px; "
+            "padding: 6px 12px; "
             "cursor: pointer; "
             "display: flex; "
             "align-items: center; "
-            "gap: 8px; "
+            "gap: 6px; "
             "transition: all 0.3s; "
-            "font-size: 14px; "
+            "font-size: 13px; "
             "color: var(--primary-text-color); "
         "}"
         ".theme-toggle:hover { "
@@ -498,40 +498,49 @@ static void add_header(String &s, const String &title)
             "border-color: var(--primary-color); "
         "}"
         ".theme-icon { "
-            "font-size: 18px; "
+            "font-size: 16px; "
         "}"
         "h2 { "
             "color: var(--primary-text-color); "
-            "font-size: 20px; "
+            "font-size: 18px; "
             "font-weight: 500; "
-            "margin: 32px 0 16px 0; "
+            "margin: 16px 0 12px 0; "
         "}"
         "h3 { "
             "color: var(--primary-text-color); "
-            "font-size: 16px; "
+            "font-size: 15px; "
             "font-weight: 500; "
-            "margin: 24px 0 12px 0; "
+            "margin: 16px 0 8px 0; "
+        "}"
+        ".card-grid { "
+            "display: grid; "
+            "grid-template-columns: 1fr; "
+            "gap: 12px; "
+            "margin: 12px 0; "
         "}"
         ".card { "
             "background-color: var(--card-background-color); "
             "border-radius: 8px; "
-            "padding: 16px; "
-            "margin: 16px 0; "
+            "padding: 12px; "
+            "margin: 0; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
             "transition: background-color 0.3s, box-shadow 0.3s; "
         "}"
         "[data-theme='dark'] .card { "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.3); "
         "}"
+        ".card-full { "
+            "grid-column: 1 / -1; "
+        "}"
         "table { "
             "border-collapse: collapse; "
             "width: 100%; "
-            "margin: 16px 0; "
+            "margin: 12px 0; "
             "background-color: var(--card-background-color); "
             "border-radius: 8px; "
             "overflow: hidden; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
-            "font-size: 14px; "
+            "font-size: 13px; "
             "transition: all 0.3s; "
         "}"
         "[data-theme='dark'] table { "
@@ -541,17 +550,17 @@ static void add_header(String &s, const String &title)
             "background-color: var(--secondary-background-color); "
         "}"
         "th { "
-            "padding: 16px 12px; "
+            "padding: 10px 8px; "
             "text-align: left; "
             "font-weight: 500; "
             "color: var(--primary-text-color); "
             "text-transform: uppercase; "
-            "font-size: 12px; "
+            "font-size: 11px; "
             "letter-spacing: 0.5px; "
             "border-bottom: 1px solid var(--divider-color); "
         "}"
         "td { "
-            "padding: 12px; "
+            "padding: 8px; "
             "border-bottom: 1px solid var(--divider-color); "
             "color: var(--primary-text-color); "
         "}"
@@ -567,7 +576,7 @@ static void add_header(String &s, const String &title)
         ".batt-weak { "
             "color: var(--error-color); "
             "font-weight: 500; "
-            "padding: 4px 8px; "
+            "padding: 3px 6px; "
             "background-color: rgba(244, 67, 54, 0.15); "
             "border-radius: 4px; "
             "display: inline-block; "
@@ -588,10 +597,10 @@ static void add_header(String &s, const String &title)
         "}"
         ".raw-data { "
             "font-family: 'Roboto Mono', 'Courier New', monospace; "
-            "font-size: 12px; "
+            "font-size: 11px; "
             "color: var(--primary-color); "
             "background-color: rgba(3, 169, 244, 0.08); "
-            "padding: 4px 8px; "
+            "padding: 3px 6px; "
             "border-radius: 4px; "
         "}"
         "[data-theme='light'] .raw-data { "
@@ -599,8 +608,8 @@ static void add_header(String &s, const String &title)
         "}"
         "form { "
             "background-color: var(--card-background-color); "
-            "padding: 24px; "
-            "margin: 16px 0; "
+            "padding: 16px; "
+            "margin: 12px 0; "
             "border-radius: 8px; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
             "transition: all 0.3s; "
@@ -610,41 +619,60 @@ static void add_header(String &s, const String &title)
         "}"
         "label { "
             "display: block; "
-            "margin: 16px 0 8px 0; "
+            "margin: 12px 0 6px 0; "
             "color: var(--primary-text-color); "
             "font-weight: 500; "
-            "font-size: 14px; "
+            "font-size: 13px; "
         "}"
         "input[type='text'], input[type='number'], input[type='password'], select, textarea { "
             "width: 100%; "
-            "padding: 12px; "
-            "margin: 4px 0 16px 0; "
+            "padding: 10px; "
+            "margin: 4px 0 12px 0; "
             "border: 1px solid var(--divider-color); "
             "border-radius: 4px; "
-            "background-color: var(--secondary-background-color); "
-            "color: var(--primary-text-color); "
-            "font-size: 14px; "
+            "background-color: var(--secondary-background-color) !important; "
+            "color: var(--primary-text-color) !important; "
+            "font-size: 13px; "
             "font-family: inherit; "
             "transition: all 0.3s; "
+            "-webkit-appearance: none; "
+            "-moz-appearance: none; "
+            "appearance: none; "
         "}"
         "input[type='text']:focus, input[type='number']:focus, input[type='password']:focus, select:focus, textarea:focus { "
             "outline: none; "
             "border-color: var(--primary-color); "
-            "background-color: var(--card-background-color); "
+            "background-color: var(--card-background-color) !important; "
         "}"
         "input[type='text']::placeholder, input[type='number']::placeholder, input[type='password']::placeholder, textarea::placeholder { "
             "color: var(--disabled-text-color); "
             "opacity: 0.7; "
         "}"
+        "input:-webkit-autofill, "
+        "input:-webkit-autofill:hover, "
+        "input:-webkit-autofill:focus, "
+        "input:-webkit-autofill:active { "
+            "-webkit-box-shadow: 0 0 0 1000px var(--secondary-background-color) inset !important; "
+            "-webkit-text-fill-color: var(--primary-text-color) !important; "
+            "transition: background-color 5000s ease-in-out 0s; "
+            "caret-color: var(--primary-text-color); "
+        "}"
+        "[data-theme='light'] input:-webkit-autofill, "
+        "[data-theme='light'] input:-webkit-autofill:hover, "
+        "[data-theme='light'] input:-webkit-autofill:focus, "
+        "[data-theme='light'] input:-webkit-autofill:active { "
+            "-webkit-box-shadow: 0 0 0 1000px var(--secondary-background-color) inset !important; "
+            "-webkit-text-fill-color: var(--primary-text-color) !important; "
+        "}"
         "input[type='submit'], input[type='button'], button { "
             "background-color: var(--primary-color); "
             "color: white; "
-            "padding: 12px 24px; "
-            "margin: 8px 8px 0 0; "
+            "padding: 10px 20px; "
+            "margin: 6px 6px 0 0; "
             "border: none; "
             "border-radius: 4px; "
             "cursor: pointer; "
-            "font-size: 14px; "
+            "font-size: 13px; "
             "font-weight: 500; "
             "text-transform: uppercase; "
             "letter-spacing: 0.5px; "
@@ -665,11 +693,11 @@ static void add_header(String &s, const String &title)
             "appearance: none; "
             "-webkit-appearance: none; "
             "-moz-appearance: none; "
-            "width: 20px; "
-            "height: 20px; "
+            "width: 18px; "
+            "height: 18px; "
             "border: 2px solid var(--divider-color); "
             "border-radius: 50%; "
-            "margin: 0 8px 0 0; "
+            "margin: 0 6px 0 0; "
             "cursor: pointer; "
             "position: relative; "
             "transition: all 0.2s; "
@@ -689,8 +717,8 @@ static void add_header(String &s, const String &title)
             "top: 50%; "
             "left: 50%; "
             "transform: translate(-50%, -50%); "
-            "width: 8px; "
-            "height: 8px; "
+            "width: 7px; "
+            "height: 7px; "
             "border-radius: 50%; "
             "background-color: white; "
         "}"
@@ -698,11 +726,11 @@ static void add_header(String &s, const String &title)
             "appearance: none; "
             "-webkit-appearance: none; "
             "-moz-appearance: none; "
-            "width: 20px; "
-            "height: 20px; "
+            "width: 18px; "
+            "height: 18px; "
             "border: 2px solid var(--divider-color); "
             "border-radius: 4px; "
-            "margin: 0 8px 0 0; "
+            "margin: 0 6px 0 0; "
             "cursor: pointer; "
             "position: relative; "
             "transition: all 0.2s; "
@@ -723,15 +751,15 @@ static void add_header(String &s, const String &title)
             "left: 50%; "
             "transform: translate(-50%, -50%); "
             "color: white; "
-            "font-size: 14px; "
+            "font-size: 13px; "
             "font-weight: bold; "
         "}"
         ".radio-group { "
             "display: flex; "
             "flex-direction: column; "
-            "gap: 12px; "
-            "margin: 16px 0; "
-            "padding: 16px; "
+            "gap: 8px; "
+            "margin: 12px 0; "
+            "padding: 12px; "
             "background-color: var(--secondary-background-color); "
             "border-radius: 8px; "
             "border: 1px solid var(--divider-color); "
@@ -739,7 +767,7 @@ static void add_header(String &s, const String &title)
         ".radio-item { "
             "display: flex; "
             "align-items: center; "
-            "padding: 8px; "
+            "padding: 6px; "
             "border-radius: 4px; "
             "cursor: pointer; "
             "transition: background-color 0.2s; "
@@ -757,19 +785,57 @@ static void add_header(String &s, const String &title)
             "flex: 1; "
             "display: flex; "
             "align-items: center; "
+            "font-size: 13px; "
         "}"
         ".radio-item input { "
-            "margin-right: 12px; "
+            "margin-right: 10px; "
         "}"
         ".option-description { "
             "color: var(--secondary-text-color); "
-            "font-size: 12px; "
-            "margin-left: 32px; "
-            "margin-top: 4px; "
+            "font-size: 11px; "
+            "margin-left: 28px; "
+            "margin-top: 3px; "
+        "}"
+        ".action-button { "
+            "display: inline-block; "
+            "padding: 10px 18px; "
+            "margin: 3px; "
+            "background-color: var(--primary-color); "
+            "color: white; "
+            "border-radius: 4px; "
+            "text-decoration: none; "
+            "font-weight: 500; "
+            "font-size: 13px; "
+            "text-transform: uppercase; "
+            "letter-spacing: 0.5px; "
+            "transition: all 0.2s; "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.2); "
+        "}"
+        ".action-button:hover { "
+            "background-color: #0288d1; "
+            "transform: translateY(-2px); "
+            "box-shadow: 0 4px 8px rgba(0,0,0,0.3); "
+            "text-decoration: none; "
+            "color: white; "
+        "}"
+        "[data-theme='light'] .action-button:hover { "
+            "background-color: #1565c0; "
+        "}"
+        ".action-button-warning { "
+            "background-color: var(--warning-color); "
+        "}"
+        ".action-button-warning:hover { "
+            "background-color: #e65100; "
+        "}"
+        ".action-buttons { "
+            "display: flex; "
+            "flex-wrap: wrap; "
+            "gap: 10px; "
+            "margin: 12px 0; "
         "}"
         "p { "
             "color: var(--primary-text-color); "
-            "margin: 12px 0; "
+            "margin: 8px 0; "
         "}"
         "em { "
             "color: var(--secondary-text-color); "
@@ -787,21 +853,21 @@ static void add_header(String &s, const String &title)
         "hr { "
             "border: none; "
             "border-top: 1px solid var(--divider-color); "
-            "margin: 32px 0; "
+            "margin: 24px 0; "
         "}"
         ".footer { "
-            "margin-top: 48px; "
-            "padding-top: 24px; "
+            "margin-top: 32px; "
+            "padding-top: 16px; "
             "border-top: 1px solid var(--divider-color); "
             "color: var(--secondary-text-color); "
-            "font-size: 13px; "
+            "font-size: 12px; "
             "text-align: center; "
         "}"
         ".status-badge { "
             "display: inline-block; "
-            "padding: 4px 12px; "
+            "padding: 3px 10px; "
             "border-radius: 12px; "
-            "font-size: 12px; "
+            "font-size: 11px; "
             "font-weight: 500; "
             "text-transform: uppercase; "
         "}"
@@ -828,16 +894,31 @@ static void add_header(String &s, const String &title)
         "}"
         ".info-text { "
             "color: var(--secondary-text-color); "
-            "font-size: 13px; "
-            "margin: 8px 0; "
+            "font-size: 12px; "
+            "margin: 6px 0; "
+        "}"
+        "@media (min-width: 768px) { "
+            ".card-grid { "
+                "grid-template-columns: repeat(2, 1fr); "
+            "}"
+        "}"
+        "@media (min-width: 1200px) { "
+            ".card-grid { "
+                "grid-template-columns: repeat(3, 1fr); "
+            "}"
+        "}"
+        "@media (min-width: 1600px) { "
+            ".card-grid { "
+                "grid-template-columns: repeat(4, 1fr); "
+            "}"
         "}"
         "@media (max-width: 768px) { "
-            "body { padding: 12px; } "
-            "table { font-size: 12px; } "
-            "th, td { padding: 8px 6px; } "
-            "h1 { font-size: 24px; } "
-            ".card, form { padding: 16px; } "
-            ".header-container { flex-direction: column; align-items: flex-start; gap: 12px; } "
+            "body { padding: 8px; } "
+            "table { font-size: 11px; } "
+            "th, td { padding: 6px 4px; } "
+            "h1 { font-size: 22px; } "
+            ".card, form { padding: 10px; } "
+            ".header-container { flex-direction: column; align-items: flex-start; gap: 8px; } "
         "}"
         "</style>"
         "<title>" + title + "</title></head>"
@@ -931,35 +1012,52 @@ void handle_index()
     String index;
     add_header(index, "LaCrosse2MQTT Gateway");
     
-    // Status-Badges
-    index += "<div class='card'>";
-    index += "<h3>System Status</h3>";
-    index += "<p>";
+    index += "<div class='card-grid'>";
     
+    index += "<div class='card'>";
+    index += "<h2>System Status</h2>";
+    index += "<p>";
     if (mqtt_ok) {
         index += "<span class='status-badge status-ok'>✓ MQTT Connected</span> ";
     } else {
         index += "<span class='status-badge status-error'>✗ MQTT Disconnected</span> ";
     }
-    
     if (WiFi.status() == WL_CONNECTED) {
-        index += "<span class='status-badge status-ok'>✓ WiFi Connected</span> ";
+        index += "<span class='status-badge status-ok'>✓ WiFi Connected</span>";
     } else {
-        index += "<span class='status-badge status-error'>✗ WiFi Disconnected</span> ";
+        index += "<span class='status-badge status-error'>✗ WiFi Disconnected</span>";
     }
-    
     index += "</p>";
     index += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
     index += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
     index += "<p class='info-text'>Uptime: " + time_string() + "</p>";
     index += "</div>";
-
+    
+    index += "<div class='card'>";
+    index += "<h2>Quick Actions</h2>";
+    index += "<div class='action-buttons'>";
+    index += "<a href='/config.html' class='action-button'>⚙️ Configuration</a>";
+    index += "<a href='/update' class='action-button'>📦 Update Firmware</a>";
+    if (config.debug_mode) {
+        index += "<a href='/debug.html' class='action-button action-button-warning'>🐛 Debug Log</a>";
+    }
+    index += "</div>";
+    index += "</div>";
+    
+    index += "</div>";
+    
+    index += "<div class='card card-full'>";
     add_current_table(index, true);
+    index += "</div>";
+    
+    // System Information Footer
+    index += "<div class='card'>";
+    index += "<h3>System Information</h3>";
+    index += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
+    index += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
+    index += "</div>";
+    
     add_sysinfo_footer(index);
-
-//    index += "<p><a href=\"/config.html\">Configuration page</a></p>\n";
-//    add_sysinfo_footer(index);
-//    index += "</body></html>\n";
     server.send(200, "text/html", index);
 }
 
@@ -973,7 +1071,7 @@ void handle_config() {
     if (server.hasArg("id") && server.hasArg("name")) {
         String _id = server.arg("id");
         String name = server.arg("name");
-        name.trim(); /* no leading / trailing whitespace to avoid strange surprises */
+        name.trim();
         if (_id[0] >= '0' && _id[0] <= '9') {
             int id = _id.toInt();
             if (id >= 0 && id < SENSOR_NUM) {
@@ -1070,9 +1168,10 @@ void handle_config() {
     String resp;
     add_header(resp, "LaCrosse2MQTT Configuration");
     
-    // System Status Card
+    resp += "<div class='card-grid'>";
+    
     resp += "<div class='card'>";
-    resp += "<h3>System Status</h3>";
+    resp += "<h2>System Status</h2>";
     resp += "<p>";
     if (mqtt_ok) {
         resp += "<span class='status-badge status-ok'>✓ MQTT Connected</span> ";
@@ -1089,12 +1188,27 @@ void handle_config() {
     resp += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
     resp += "</div>";
     
-    // Sensor Table
+    resp += "<div class='card'>";
+    resp += "<h2>Quick Actions</h2>";
+    resp += "<div class='action-buttons'>";
+    resp += "<a href='/update' class='action-button'>📦 Update Firmware</a>";
+    if (config.debug_mode) {
+        resp += "<a href='/debug.html' class='action-button action-button-warning'>🐛 Debug Log</a>";
+    }
+    resp += "<a href='/' class='action-button'>🏠 Main Page</a>";
+    resp += "</div>";
+    resp += "</div>";
+    
+    resp += "</div>";
+    
+    resp += "<div class='card card-full'>";
     add_current_table(resp, true);
+    resp += "</div>";
     
     token = millis();
     
-    // Sensor Name Configuration
+    resp += "<div class='card-grid'>";
+    
     resp += "<div class='card'>";
     resp += "<h2>Sensor Configuration</h2>";
     resp += "<form action='/config.html'>";
@@ -1106,7 +1220,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
     
-    // MQTT Configuration
     resp += "<div class='card'>";
     resp += "<h2>MQTT Server Configuration</h2>";
     resp += "<form action='/config.html'>";
@@ -1122,7 +1235,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
     
-    // Save/Cancel Buttons
     if (config_changed) {
         resp += "<div class='card' style='background-color: rgba(255, 152, 0, 0.1); border: 1px solid var(--warning-color);'>";
         resp += "<h3>⚠️ Unsaved Changes</h3>";
@@ -1138,7 +1250,6 @@ void handle_config() {
         resp += "</div>";
     }
     
-    // LittleFS Warning
     if (!littlefs_ok) {
         resp += "<div class='card' style='background-color: rgba(244, 67, 54, 0.1); border: 1px solid var(--error-color);'>";
         resp += "<h3>❌ Filesystem Error</h3>";
@@ -1151,7 +1262,6 @@ void handle_config() {
         resp += "</div>";
     }
     
-    // Display Settings
     resp += "<div class='card'>";
     resp += "<h2>Display Settings</h2>";
     resp += "<form action='/config.html'>";
@@ -1173,9 +1283,8 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
     
-    // Home Assistant Discovery
     resp += "<div class='card'>";
-    resp += "<h2>Home Assistant Integration</h2>";
+    resp += "<h2>Home Assistant</h2>";
     resp += "<form action='/config.html'>";
     resp += "<div class='radio-group'>";
     resp += "  <div class='radio-item'>";
@@ -1196,7 +1305,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
     
-    // Debug Mode
     resp += "<div class='card'>";
     resp += "<h2>Debug Settings</h2>";
     resp += "<form action='/config.html'>";
@@ -1219,7 +1327,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
     
-    // Screensaver Mode
     resp += "<div class='card'>";
     resp += "<h2>Screensaver Settings</h2>";
     resp += "<form action='/config.html'>";
@@ -1242,16 +1349,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
     
-    // Quick Links
-    resp += "<div class='card'>";
-    resp += "<h2>Quick Actions</h2>";
-    resp += "<p>";
-    resp += "<a href='/update' style='margin-right: 16px;'>📦 Update Firmware</a>";
-    if (config.debug_mode) {
-        resp += "<a href='/debug.html' style='margin-right: 16px;'>🐛 Debug Log</a>";
-    }
-    resp += "<a href='/'>🏠 Main Page</a>";
-    resp += "</p>";
     resp += "</div>";
     
     add_sysinfo_footer(resp);
@@ -1319,7 +1416,6 @@ void handle_debug() {
     resp += "</body></html>\n";
     server.send(200, "text/html", resp);
 }
-
 
 void setup_web()
 {
