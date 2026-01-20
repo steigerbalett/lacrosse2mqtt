@@ -38,7 +38,7 @@ extern Adafruit_SSD1306 display;
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "2026.1"
+#define LACROSSE2MQTT_VERSION  "2026.1.1"
 #endif
 
 // 16x16 Pixel Thermometer Favicon
@@ -395,10 +395,12 @@ void add_current_table(String &s, bool rawdata)
         if (rawdata) {
             s += "<td class='raw-data'>0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
-                char tmp[3];
-                snprintf(tmp, 3, "%02X", fcache[j].data[j]);
-                s += String(tmp);
-            }
+            char tmp[3];
+            snprintf(tmp, 3, "%02X", fcache[i].data[j]);
+            s += String(tmp);
+        if (j < FRAME_LENGTH - 1)
+            s += " ";
+}
             s += "</td>";
         }
 
@@ -416,134 +418,469 @@ void add_current_table(String &s, bool rawdata)
     }
 }
 
-
-void add_header(String &s, String title)
+static void add_header(String &s, const String &title)
 {
-    s = "<!DOCTYPE HTML><html><head>"
-        "<meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        "<meta name=\"description\" content=\"lacrosse sensors to mqtt converter\">"
-        "<link rel=\"icon\" href=\"/favicon.ico\" type=\"image/x-icon\">"
+    s = "<!DOCTYPE html><html><head>"
+        "<meta charset='UTF-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<style>"
+        ":root { "
+            "--primary-color: #03a9f4; "
+            "--accent-color: #ff9800; "
+            "--primary-background-color: #111111; "
+            "--secondary-background-color: #1c1c1c; "
+            "--card-background-color: #1c1c1c; "
+            "--primary-text-color: #e1e1e1; "
+            "--secondary-text-color: #9b9b9b; "
+            "--disabled-text-color: #6f6f6f; "
+            "--divider-color: #2f2f2f; "
+            "--success-color: #4caf50; "
+            "--warning-color: #ff9800; "
+            "--error-color: #f44336; "
+            "--info-color: #2196f3; "
+        "}"
+        "[data-theme='light'] { "
+            "--primary-color: #1976d2; "
+            "--accent-color: #f57c00; "
+            "--primary-background-color: #fafafa; "
+            "--secondary-background-color: #ffffff; "
+            "--card-background-color: #ffffff; "
+            "--primary-text-color: #212121; "
+            "--secondary-text-color: #757575; "
+            "--disabled-text-color: #9e9e9e; "
+            "--divider-color: #e0e0e0; "
+            "--success-color: #2e7d32; "
+            "--warning-color: #f57c00; "
+            "--error-color: #c62828; "
+            "--info-color: #1976d2; "
+        "}"
+        "* { "
+            "box-sizing: border-box; "
+        "}"
         "body { "
-            "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; "
+            "font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; "
             "margin: 0; "
             "padding: 20px; "
-            "background-color: #f5f5f5; "
+            "background-color: var(--primary-background-color); "
+            "color: var(--primary-text-color); "
+            "line-height: 1.6; "
+            "transition: background-color 0.3s, color 0.3s; "
         "}"
-        "h1, h2, h3 { "
-            "color: #333; "
+        ".header-container { "
+            "display: flex; "
+            "justify-content: space-between; "
+            "align-items: center; "
+            "margin-bottom: 24px; "
+            "padding-bottom: 16px; "
+            "border-bottom: 1px solid var(--divider-color); "
+        "}"
+        "h1 { "
+            "color: var(--primary-text-color); "
+            "font-size: 32px; "
+            "font-weight: 400; "
+            "margin: 0; "
+        "}"
+        ".theme-toggle { "
+            "background-color: var(--card-background-color); "
+            "border: 1px solid var(--divider-color); "
+            "border-radius: 24px; "
+            "padding: 8px 16px; "
+            "cursor: pointer; "
+            "display: flex; "
+            "align-items: center; "
+            "gap: 8px; "
+            "transition: all 0.3s; "
+            "font-size: 14px; "
+            "color: var(--primary-text-color); "
+        "}"
+        ".theme-toggle:hover { "
+            "background-color: var(--secondary-background-color); "
+            "border-color: var(--primary-color); "
+        "}"
+        ".theme-icon { "
+            "font-size: 18px; "
         "}"
         "h2 { "
-            "margin-top: 30px; "
-            "border-bottom: 2px solid #4CAF50; "
-            "padding-bottom: 10px; "
+            "color: var(--primary-text-color); "
+            "font-size: 20px; "
+            "font-weight: 500; "
+            "margin: 32px 0 16px 0; "
+        "}"
+        "h3 { "
+            "color: var(--primary-text-color); "
+            "font-size: 16px; "
+            "font-weight: 500; "
+            "margin: 24px 0 12px 0; "
+        "}"
+        ".card { "
+            "background-color: var(--card-background-color); "
+            "border-radius: 8px; "
+            "padding: 16px; "
+            "margin: 16px 0; "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
+            "transition: background-color 0.3s, box-shadow 0.3s; "
+        "}"
+        "[data-theme='dark'] .card { "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.3); "
         "}"
         "table { "
             "border-collapse: collapse; "
             "width: 100%; "
-            "margin: 20px 0; "
-            "background-color: white; "
+            "margin: 16px 0; "
+            "background-color: var(--card-background-color); "
+            "border-radius: 8px; "
+            "overflow: hidden; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
             "font-size: 14px; "
+            "transition: all 0.3s; "
+        "}"
+        "[data-theme='dark'] table { "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.3); "
         "}"
         "thead { "
-            "background-color: #4CAF50; "
-            "color: white; "
+            "background-color: var(--secondary-background-color); "
         "}"
         "th { "
-            "padding: 12px 8px; "
+            "padding: 16px 12px; "
             "text-align: left; "
-            "font-weight: 600; "
+            "font-weight: 500; "
+            "color: var(--primary-text-color); "
             "text-transform: uppercase; "
             "font-size: 12px; "
             "letter-spacing: 0.5px; "
+            "border-bottom: 1px solid var(--divider-color); "
         "}"
         "td { "
-            "padding: 10px 8px; "
-            "border-bottom: 1px solid #ddd; "
+            "padding: 12px; "
+            "border-bottom: 1px solid var(--divider-color); "
+            "color: var(--primary-text-color); "
         "}"
         "tbody tr:hover { "
-            "background-color: #f0f8ff; "
+            "background-color: rgba(3, 169, 244, 0.08); "
         "}"
-        "tbody tr:nth-child(even) { "
-            "background-color: #f9f9f9; "
+        "[data-theme='light'] tbody tr:hover { "
+            "background-color: rgba(25, 118, 210, 0.08); "
+        "}"
+        "tbody tr:last-child td { "
+            "border-bottom: none; "
         "}"
         ".batt-weak { "
-            "color: #d32f2f; "
-            "font-weight: bold; "
-            "background-color: #ffebee; "
+            "color: var(--error-color); "
+            "font-weight: 500; "
+            "padding: 4px 8px; "
+            "background-color: rgba(244, 67, 54, 0.15); "
+            "border-radius: 4px; "
+            "display: inline-block; "
+        "}"
+        "[data-theme='light'] .batt-weak { "
+            "background-color: rgba(198, 40, 40, 0.1); "
         "}"
         ".batt-ok { "
-            "color: #388e3c; "
-            "font-weight: bold; "
+            "color: var(--success-color); "
+            "font-weight: 500; "
         "}"
         ".init-new { "
-            "color: #1976d2; "
-            "font-weight: bold; "
+            "color: var(--info-color); "
+            "font-weight: 500; "
         "}"
         ".init-no { "
-            "color: #757575; "
+            "color: var(--secondary-text-color); "
         "}"
         ".raw-data { "
-            "font-family: 'Courier New', monospace; "
+            "font-family: 'Roboto Mono', 'Courier New', monospace; "
             "font-size: 12px; "
-            "background-color: #f5f5f5; "
+            "color: var(--primary-color); "
+            "background-color: rgba(3, 169, 244, 0.08); "
+            "padding: 4px 8px; "
+            "border-radius: 4px; "
+        "}"
+        "[data-theme='light'] .raw-data { "
+            "background-color: rgba(25, 118, 210, 0.08); "
         "}"
         "form { "
-            "background-color: white; "
-            "padding: 20px; "
-            "margin: 20px 0; "
-            "border-radius: 4px; "
+            "background-color: var(--card-background-color); "
+            "padding: 24px; "
+            "margin: 16px 0; "
+            "border-radius: 8px; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
+            "transition: all 0.3s; "
         "}"
-        "input[type='text'], input[type='number'] { "
+        "[data-theme='dark'] form { "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.3); "
+        "}"
+        "label { "
+            "display: block; "
+            "margin: 16px 0 8px 0; "
+            "color: var(--primary-text-color); "
+            "font-weight: 500; "
+            "font-size: 14px; "
+        "}"
+        "input[type='text'], input[type='number'], input[type='password'], select, textarea { "
             "width: 100%; "
-            "padding: 8px; "
-            "margin: 5px 0; "
-            "border: 1px solid #ddd; "
+            "padding: 12px; "
+            "margin: 4px 0 16px 0; "
+            "border: 1px solid var(--divider-color); "
             "border-radius: 4px; "
-            "box-sizing: border-box; "
+            "background-color: var(--secondary-background-color); "
+            "color: var(--primary-text-color); "
+            "font-size: 14px; "
+            "font-family: inherit; "
+            "transition: all 0.3s; "
         "}"
-        "input[type='submit'], input[type='button'] { "
-            "background-color: #4CAF50; "
+        "input[type='text']:focus, input[type='number']:focus, input[type='password']:focus, select:focus, textarea:focus { "
+            "outline: none; "
+            "border-color: var(--primary-color); "
+            "background-color: var(--card-background-color); "
+        "}"
+        "input[type='text']::placeholder, input[type='number']::placeholder, input[type='password']::placeholder, textarea::placeholder { "
+            "color: var(--disabled-text-color); "
+            "opacity: 0.7; "
+        "}"
+        "input[type='submit'], input[type='button'], button { "
+            "background-color: var(--primary-color); "
             "color: white; "
-            "padding: 10px 20px; "
-            "margin: 10px 5px 0 0; "
+            "padding: 12px 24px; "
+            "margin: 8px 8px 0 0; "
             "border: none; "
             "border-radius: 4px; "
             "cursor: pointer; "
             "font-size: 14px; "
+            "font-weight: 500; "
+            "text-transform: uppercase; "
+            "letter-spacing: 0.5px; "
+            "transition: background-color 0.2s; "
         "}"
-        "input[type='submit']:hover, input[type='button']:hover { "
-            "background-color: #45a049; "
+        "input[type='submit']:hover, input[type='button']:hover, button:hover { "
+            "background-color: #0288d1; "
+        "}"
+        "[data-theme='light'] input[type='submit']:hover, "
+        "[data-theme='light'] input[type='button']:hover, "
+        "[data-theme='light'] button:hover { "
+            "background-color: #1565c0; "
+        "}"
+        "input[type='submit']:active, input[type='button']:active, button:active { "
+            "background-color: #01579b; "
         "}"
         "input[type='radio'] { "
-            "margin: 0 5px 0 15px; "
+            "appearance: none; "
+            "-webkit-appearance: none; "
+            "-moz-appearance: none; "
+            "width: 20px; "
+            "height: 20px; "
+            "border: 2px solid var(--divider-color); "
+            "border-radius: 50%; "
+            "margin: 0 8px 0 0; "
+            "cursor: pointer; "
+            "position: relative; "
+            "transition: all 0.2s; "
+            "vertical-align: middle; "
+            "background-color: var(--secondary-background-color); "
         "}"
-        "label { "
-            "margin-right: 15px; "
+        "input[type='radio']:hover { "
+            "border-color: var(--primary-color); "
+        "}"
+        "input[type='radio']:checked { "
+            "border-color: var(--primary-color); "
+            "background-color: var(--primary-color); "
+        "}"
+        "input[type='radio']:checked::after { "
+            "content: ''; "
+            "position: absolute; "
+            "top: 50%; "
+            "left: 50%; "
+            "transform: translate(-50%, -50%); "
+            "width: 8px; "
+            "height: 8px; "
+            "border-radius: 50%; "
+            "background-color: white; "
+        "}"
+        "input[type='checkbox'] { "
+            "appearance: none; "
+            "-webkit-appearance: none; "
+            "-moz-appearance: none; "
+            "width: 20px; "
+            "height: 20px; "
+            "border: 2px solid var(--divider-color); "
+            "border-radius: 4px; "
+            "margin: 0 8px 0 0; "
+            "cursor: pointer; "
+            "position: relative; "
+            "transition: all 0.2s; "
+            "vertical-align: middle; "
+            "background-color: var(--secondary-background-color); "
+        "}"
+        "input[type='checkbox']:hover { "
+            "border-color: var(--primary-color); "
+        "}"
+        "input[type='checkbox']:checked { "
+            "border-color: var(--primary-color); "
+            "background-color: var(--primary-color); "
+        "}"
+        "input[type='checkbox']:checked::after { "
+            "content: '✓'; "
+            "position: absolute; "
+            "top: 50%; "
+            "left: 50%; "
+            "transform: translate(-50%, -50%); "
+            "color: white; "
+            "font-size: 14px; "
+            "font-weight: bold; "
+        "}"
+        ".radio-group { "
+            "display: flex; "
+            "flex-direction: column; "
+            "gap: 12px; "
+            "margin: 16px 0; "
+            "padding: 16px; "
+            "background-color: var(--secondary-background-color); "
+            "border-radius: 8px; "
+            "border: 1px solid var(--divider-color); "
+        "}"
+        ".radio-item { "
+            "display: flex; "
+            "align-items: center; "
+            "padding: 8px; "
+            "border-radius: 4px; "
+            "cursor: pointer; "
+            "transition: background-color 0.2s; "
+        "}"
+        ".radio-item:hover { "
+            "background-color: rgba(3, 169, 244, 0.08); "
+        "}"
+        "[data-theme='light'] .radio-item:hover { "
+            "background-color: rgba(25, 118, 210, 0.08); "
+        "}"
+        ".radio-item label { "
+            "margin: 0; "
+            "font-weight: 400; "
+            "cursor: pointer; "
+            "flex: 1; "
+            "display: flex; "
+            "align-items: center; "
+        "}"
+        ".radio-item input { "
+            "margin-right: 12px; "
+        "}"
+        ".option-description { "
+            "color: var(--secondary-text-color); "
+            "font-size: 12px; "
+            "margin-left: 32px; "
+            "margin-top: 4px; "
         "}"
         "p { "
-            "color: #666; "
+            "color: var(--primary-text-color); "
+            "margin: 12px 0; "
         "}"
         "em { "
-            "color: #888; "
+            "color: var(--secondary-text-color); "
+            "font-style: normal; "
         "}"
         "a { "
-            "color: #4CAF50; "
+            "color: var(--primary-color); "
             "text-decoration: none; "
+            "transition: color 0.2s; "
         "}"
         "a:hover { "
+            "color: var(--accent-color); "
             "text-decoration: underline; "
         "}"
+        "hr { "
+            "border: none; "
+            "border-top: 1px solid var(--divider-color); "
+            "margin: 32px 0; "
+        "}"
+        ".footer { "
+            "margin-top: 48px; "
+            "padding-top: 24px; "
+            "border-top: 1px solid var(--divider-color); "
+            "color: var(--secondary-text-color); "
+            "font-size: 13px; "
+            "text-align: center; "
+        "}"
+        ".status-badge { "
+            "display: inline-block; "
+            "padding: 4px 12px; "
+            "border-radius: 12px; "
+            "font-size: 12px; "
+            "font-weight: 500; "
+            "text-transform: uppercase; "
+        "}"
+        ".status-ok { "
+            "background-color: rgba(76, 175, 80, 0.15); "
+            "color: var(--success-color); "
+        "}"
+        "[data-theme='light'] .status-ok { "
+            "background-color: rgba(46, 125, 50, 0.1); "
+        "}"
+        ".status-error { "
+            "background-color: rgba(244, 67, 54, 0.15); "
+            "color: var(--error-color); "
+        "}"
+        "[data-theme='light'] .status-error { "
+            "background-color: rgba(198, 40, 40, 0.1); "
+        "}"
+        ".status-warning { "
+            "background-color: rgba(255, 152, 0, 0.15); "
+            "color: var(--warning-color); "
+        "}"
+        "[data-theme='light'] .status-warning { "
+            "background-color: rgba(245, 124, 0, 0.1); "
+        "}"
+        ".info-text { "
+            "color: var(--secondary-text-color); "
+            "font-size: 13px; "
+            "margin: 8px 0; "
+        "}"
         "@media (max-width: 768px) { "
+            "body { padding: 12px; } "
             "table { font-size: 12px; } "
-            "th, td { padding: 8px 4px; } "
+            "th, td { padding: 8px 6px; } "
+            "h1 { font-size: 24px; } "
+            ".card, form { padding: 16px; } "
+            ".header-container { flex-direction: column; align-items: flex-start; gap: 12px; } "
         "}"
         "</style>"
-        "<title>" + title + "</title></head><body>"
-        "<h1>" + title + "</h1>";
+        "<title>" + title + "</title></head>"
+        "<body>"
+        "<div class='header-container'>"
+        "<h1>🌡️ " + title + "</h1>"
+        "<div class='theme-toggle' onclick='toggleTheme()'>"
+            "<span class='theme-icon' id='theme-icon'>🌙</span>"
+            "<span id='theme-text'>Dark Mode</span>"
+        "</div>"
+        "</div>"
+        "<script>"
+        "function toggleTheme() {"
+            "const body = document.body;"
+            "const icon = document.getElementById('theme-icon');"
+            "const text = document.getElementById('theme-text');"
+            "const currentTheme = body.getAttribute('data-theme');"
+            "if (currentTheme === 'light') {"
+                "body.setAttribute('data-theme', 'dark');"
+                "icon.textContent = '🌙';"
+                "text.textContent = 'Dark Mode';"
+                "localStorage.setItem('theme', 'dark');"
+            "} else {"
+                "body.setAttribute('data-theme', 'light');"
+                "icon.textContent = '☀️';"
+                "text.textContent = 'Light Mode';"
+                "localStorage.setItem('theme', 'light');"
+            "}"
+        "}"
+        "window.addEventListener('DOMContentLoaded', (event) => {"
+            "const savedTheme = localStorage.getItem('theme') || 'dark';"
+            "const icon = document.getElementById('theme-icon');"
+            "const text = document.getElementById('theme-text');"
+            "document.body.setAttribute('data-theme', savedTheme);"
+            "if (savedTheme === 'light') {"
+                "icon.textContent = '☀️';"
+                "text.textContent = 'Light Mode';"
+            "} else {"
+                "icon.textContent = '🌙';"
+                "text.textContent = 'Dark Mode';"
+            "}"
+        "});"
+        "</script>";
 }
 
 /* from tasmota */
@@ -589,15 +926,40 @@ void add_sysinfo_footer(String &s)
         "</p>\n";
 }
 
-void handle_index() {
-    // TODO: use server.hostHeader()?
-    String IP = WiFi.localIP().toString();
+void handle_index()
+{
     String index;
-    add_header(index, "LaCrosse2mqtt");
-    add_current_table(index, false);
-    index += "<p><a href=\"/config.html\">Configuration page</a></p>\n";
+    add_header(index, "LaCrosse2MQTT Gateway");
+    
+    // Status-Badges
+    index += "<div class='card'>";
+    index += "<h3>System Status</h3>";
+    index += "<p>";
+    
+    if (mqtt_ok) {
+        index += "<span class='status-badge status-ok'>✓ MQTT Connected</span> ";
+    } else {
+        index += "<span class='status-badge status-error'>✗ MQTT Disconnected</span> ";
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        index += "<span class='status-badge status-ok'>✓ WiFi Connected</span> ";
+    } else {
+        index += "<span class='status-badge status-error'>✗ WiFi Disconnected</span> ";
+    }
+    
+    index += "</p>";
+    index += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
+    index += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
+    index += "<p class='info-text'>Uptime: " + time_string() + "</p>";
+    index += "</div>";
+
+    add_current_table(index, true);
     add_sysinfo_footer(index);
-    index += "</body></html>\n";
+
+//    index += "<p><a href=\"/config.html\">Configuration page</a></p>\n";
+//    add_sysinfo_footer(index);
+//    index += "</body></html>\n";
     server.send(200, "text/html", index);
 }
 
@@ -605,6 +967,7 @@ const String on = "on";
 const String off = "off";
 const String checked = " checked=\"checked\"";
 static bool config_changed = false;
+
 void handle_config() {
     static unsigned long token = millis();
     if (server.hasArg("id") && server.hasArg("name")) {
@@ -657,7 +1020,6 @@ void handle_config() {
             Serial.println("Debug mode changed to: " + String(config.debug_mode));
         }
     }
-    // NEU: Screensaver Mode Handler
     if (server.hasArg("screensaver_mode")) {
         String _on = server.arg("screensaver_mode");
         int tmp = _on.toInt();
@@ -672,11 +1034,6 @@ void handle_config() {
             load_idmap();
             load_config();
             config_changed = false;
-#if 0
-            ESP.restart();
-            while (true)
-                delay(100);
-#endif
         }
     }
     if (server.hasArg("format")) {
@@ -709,95 +1066,195 @@ void handle_config() {
             config_changed = true;
         config.ha_discovery = tmp;
     }
-    String resp;
-    add_header(resp, "LaCrosse2mqtt Configuration");
-    add_current_table(resp, true);
-    token = millis();
-    resp += "<p>\n"
-        "<form action=\"/config.html\">\n"
-        "<table>\n"
-            " <tr>\n"
-                "<td>ID (0-255):</td><td><input type=\"number\" name=\"id\" min=\"0\" max=\"255\"></td>"
-                "<td>Name:</td><td><input name=\"name\" value=\"\"></td>"
-                "<td><button type=\"submit\">Submit</button></td>\n"
-            "</tr>\n"
-        "</table>\n"
-        "</form>\n"
-        "<p></p>\n"
-        "MQTT server configuration (Status: connection ";
-    if (!mqtt_ok)
-        resp += "NOT ";
-    resp += "ok)\n"
-        "<form action=\"/config.html\">\n"
-        "<table>\n"
-            "<tr>\n"
-                "<td>FQDN / IP address:</td><td><input name=\"mqtt_server\" value=\"" + config.mqtt_server + "\"></td>"
-                "<td>Port:</td><td><input type=\"number\" name=\"mqtt_port\" value=\"" + String(config.mqtt_port) + "\"></td>"
-            "</tr>\n"
-            "<tr>\n"
-                "<td>Username (empty to disable):</td><td><input name=\"mqtt_user\" value=\"" + config.mqtt_user + "\"></td>"
-                "<td>Password:</td><td><input  name=\"mqtt_pass\" value=\"" + String(config.mqtt_pass) + "\"></td>"
-                "<td><button type=\"submit\">Submit</button></td>\n"
-            "</tr>\n"
-        "</table>\n"
-        "</form>\n";
-    if (config_changed) {
-        resp += "<p></p>\nConfig changed, please save or reload old config.\n"
-            "<table>\n<tr>\n<td>"
-            "<form action=\"/config.html\">"
-            "<input type=\"hidden\" name=\"save\" value=\"" + String(token) + "\"><button type=\"submit\">Save</button>"
-            "</form></td>\n<td>"
-            "<form action=\"/config.html\">"
-            "<input type=\"hidden\" name=\"cancel\" value=\"" + String(token) + "\"><button type=\"submit\">Reload</button>"
-            "</form></td>\n</tr>\n</table>\n";
-    }
-    if (!littlefs_ok) {
-        resp += "<p></p>\n"
-            "<form action=\"/config.html\">"
-            "<strong>LittleFS seems damaged. Saving will not work.</strong> Format it? "
-            "<input type=\"hidden\" name=\"format\" value=\"" + String(token) + "\"><button type=\"submit\">Yes, format!</button>"
-            "</form>\n";
-    }
-    resp += "<p></p>\n"
-            "<form action=\"/config.html\">"
-            "<table><tr>"
-            "<td>Display always on</td>"
-            "<td><input type=\"radio\" id=\"d_on\" name=\"display\" value=\"1\" " + (config.display_on?checked:String()) + "/>"
-            "<label for=\"d_on\">on</label></td>"
-            "<td><input type=\"radio\" id=\"d_off\" name=\"display\" value=\"0\"" + (config.display_on?String():checked) + "/>"
-            "<label for=\"d_off\">off</label></td>"
-            "<td><button type=\"submit\">Submit</button></td>"
-            "</tr><tr>"
-            "<td>Home Assistant discovery</td>"
-            "<td><input type=\"radio\" id=\"ha_on\" name=\"ha_disc\" value=\"1\" " + (config.ha_discovery?checked:String()) + "/>"
-            "<label for=\"ha_on\">on</label></td>"
-            "<td><input type=\"radio\" id=\"ha_off\" name=\"ha_disc\" value=\"0\"" + (config.ha_discovery?String():checked) + "/>"
-            "<label for=\"ha_off\">off</label></td>"
-            "<td><button type=\"submit\">Submit</button></td>"
-            "</tr><tr>"
-            "<td>Debug Mode (RAW frames)</td>"
-            "<td><input type=\"radio\" id=\"dbg_on\" name=\"debug_mode\" value=\"1\" " + (config.debug_mode?checked:String()) + "/>"
-            "<label for=\"dbg_on\">on</label></td>"
-            "<td><input type=\"radio\" id=\"dbg_off\" name=\"debug_mode\" value=\"0\"" + (config.debug_mode?String():checked) + "/>"
-            "<label for=\"dbg_off\">off</label></td>"
-            "<td><button type=\"submit\">Submit</button></td>"
-            "</tr><tr>"  // NEU: Screensaver innerhalb der Tabelle
-            "<td>Screensaver after 5min</td>"
-            "<td><input type=\"radio\" id=\"ssaver_on\" name=\"screensaver_mode\" value=\"1\"" + (config.screensaver_mode?checked:String()) + "/>"
-            "<label for=\"ssaver_on\">on</label></td>"
-            "<td><input type=\"radio\" id=\"ssaver_off\" name=\"screensaver_mode\" value=\"0\"" + (config.screensaver_mode?String():checked) + "/>"
-            "<label for=\"ssaver_off\">off</label></td>"
-            "<td><button type=\"submit\">Submit</button></td>"
-            "</tr></table>"
-            "</form>\n";
     
-    resp += "<p><a href=\"/update\">Update software</a></p>\n";
-    if (config.debug_mode) {
-        resp += "<p><a href=\"/debug.html\">Debug Log</a></p>\n";
+    String resp;
+    add_header(resp, "LaCrosse2MQTT Configuration");
+    
+    // System Status Card
+    resp += "<div class='card'>";
+    resp += "<h3>System Status</h3>";
+    resp += "<p>";
+    if (mqtt_ok) {
+        resp += "<span class='status-badge status-ok'>✓ MQTT Connected</span> ";
+    } else {
+        resp += "<span class='status-badge status-error'>✗ MQTT Disconnected</span> ";
     }
-    resp += "<p><a href=\"/\">Main page</a></p>\n";
+    if (WiFi.status() == WL_CONNECTED) {
+        resp += "<span class='status-badge status-ok'>✓ WiFi Connected</span>";
+    } else {
+        resp += "<span class='status-badge status-error'>✗ WiFi Disconnected</span>";
+    }
+    resp += "</p>";
+    resp += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
+    resp += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
+    resp += "</div>";
+    
+    // Sensor Table
+    add_current_table(resp, true);
+    
+    token = millis();
+    
+    // Sensor Name Configuration
+    resp += "<div class='card'>";
+    resp += "<h2>Sensor Configuration</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<label>ID (0-255):</label>";
+    resp += "<input type='number' name='id' min='0' max='255' placeholder='Enter sensor ID'>";
+    resp += "<label>Name:</label>";
+    resp += "<input type='text' name='name' placeholder='Enter friendly name'>";
+    resp += "<button type='submit'>Add/Update Sensor Name</button>";
+    resp += "</form>";
+    resp += "</div>";
+    
+    // MQTT Configuration
+    resp += "<div class='card'>";
+    resp += "<h2>MQTT Server Configuration</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<label>FQDN / IP Address:</label>";
+    resp += "<input type='text' name='mqtt_server' value='" + config.mqtt_server + "' placeholder='mqtt.example.com'>";
+    resp += "<label>Port:</label>";
+    resp += "<input type='number' name='mqtt_port' value='" + String(config.mqtt_port) + "' placeholder='1883'>";
+    resp += "<label>Username (optional):</label>";
+    resp += "<input type='text' name='mqtt_user' value='" + config.mqtt_user + "' placeholder='Leave empty to disable authentication'>";
+    resp += "<label>Password:</label>";
+    resp += "<input type='password' name='mqtt_pass' value='" + config.mqtt_pass + "' placeholder='Enter password'>";
+    resp += "<button type='submit'>Update MQTT Settings</button>";
+    resp += "</form>";
+    resp += "</div>";
+    
+    // Save/Cancel Buttons
+    if (config_changed) {
+        resp += "<div class='card' style='background-color: rgba(255, 152, 0, 0.1); border: 1px solid var(--warning-color);'>";
+        resp += "<h3>⚠️ Unsaved Changes</h3>";
+        resp += "<p>You have unsaved configuration changes. Please save or reload to discard.</p>";
+        resp += "<form action='/config.html' style='display: inline; margin-right: 8px;'>";
+        resp += "<input type='hidden' name='save' value='" + String(token) + "'>";
+        resp += "<button type='submit' style='background-color: var(--success-color);'>💾 Save Configuration</button>";
+        resp += "</form>";
+        resp += "<form action='/config.html' style='display: inline;'>";
+        resp += "<input type='hidden' name='cancel' value='" + String(token) + "'>";
+        resp += "<button type='submit' style='background-color: var(--error-color);'>🔄 Discard Changes</button>";
+        resp += "</form>";
+        resp += "</div>";
+    }
+    
+    // LittleFS Warning
+    if (!littlefs_ok) {
+        resp += "<div class='card' style='background-color: rgba(244, 67, 54, 0.1); border: 1px solid var(--error-color);'>";
+        resp += "<h3>❌ Filesystem Error</h3>";
+        resp += "<p><strong>LittleFS seems damaged. Saving will not work.</strong></p>";
+        resp += "<p>This will erase all saved configuration. Continue?</p>";
+        resp += "<form action='/config.html'>";
+        resp += "<input type='hidden' name='format' value='" + String(token) + "'>";
+        resp += "<button type='submit' style='background-color: var(--error-color);'>⚠️ Format Filesystem</button>";
+        resp += "</form>";
+        resp += "</div>";
+    }
+    
+    // Display Settings
+    resp += "<div class='card'>";
+    resp += "<h2>Display Settings</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<div class='radio-group'>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='display' value='1'" + (config.display_on ? checked : "") + "/>";
+    resp += "      Always On";
+    resp += "    </label>";
+    resp += "  </div>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='display' value='0'" + (!config.display_on ? checked : "") + "/>";
+    resp += "      Auto-Off (5 min timeout)";
+    resp += "    </label>";
+    resp += "  </div>";
+    resp += "</div>";
+    resp += "<button type='submit'>Update Display</button>";
+    resp += "</form>";
+    resp += "</div>";
+    
+    // Home Assistant Discovery
+    resp += "<div class='card'>";
+    resp += "<h2>Home Assistant Integration</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<div class='radio-group'>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='ha_disc' value='1'" + (config.ha_discovery ? checked : "") + "/>";
+    resp += "      Enable Auto-Discovery";
+    resp += "    </label>";
+    resp += "    <div class='option-description'>Automatically register sensors in Home Assistant via MQTT discovery</div>";
+    resp += "  </div>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='ha_disc' value='0'" + (!config.ha_discovery ? checked : "") + "/>";
+    resp += "      Disable";
+    resp += "    </label>";
+    resp += "  </div>";
+    resp += "</div>";
+    resp += "<button type='submit'>Update Home Assistant</button>";
+    resp += "</form>";
+    resp += "</div>";
+    
+    // Debug Mode
+    resp += "<div class='card'>";
+    resp += "<h2>Debug Settings</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<div class='radio-group'>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='debug_mode' value='1'" + (config.debug_mode ? checked : "") + "/>";
+    resp += "      Enable Debug Mode";
+    resp += "    </label>";
+    resp += "    <div class='option-description'>Show RAW frame data in serial console for troubleshooting</div>";
+    resp += "  </div>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='debug_mode' value='0'" + (!config.debug_mode ? checked : "") + "/>";
+    resp += "      Disable";
+    resp += "    </label>";
+    resp += "  </div>";
+    resp += "</div>";
+    resp += "<button type='submit'>Update Debug Mode</button>";
+    resp += "</form>";
+    resp += "</div>";
+    
+    // Screensaver Mode
+    resp += "<div class='card'>";
+    resp += "<h2>Screensaver Settings</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<div class='radio-group'>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='screensaver_mode' value='1'" + (config.screensaver_mode ? checked : "") + "/>";
+    resp += "      Enable Screensaver";
+    resp += "    </label>";
+    resp += "    <div class='option-description'>Show starfield animation after 5 minutes of inactivity</div>";
+    resp += "  </div>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='screensaver_mode' value='0'" + (!config.screensaver_mode ? checked : "") + "/>";
+    resp += "      Disable";
+    resp += "    </label>";
+    resp += "  </div>";
+    resp += "</div>";
+    resp += "<button type='submit'>Update Screensaver</button>";
+    resp += "</form>";
+    resp += "</div>";
+    
+    // Quick Links
+    resp += "<div class='card'>";
+    resp += "<h2>Quick Actions</h2>";
+    resp += "<p>";
+    resp += "<a href='/update' style='margin-right: 16px;'>📦 Update Firmware</a>";
+    if (config.debug_mode) {
+        resp += "<a href='/debug.html' style='margin-right: 16px;'>🐛 Debug Log</a>";
+    }
+    resp += "<a href='/'>🏠 Main Page</a>";
+    resp += "</p>";
+    resp += "</div>";
+    
     add_sysinfo_footer(resp);
-    resp += "</body></html>\n";
     server.send(200, "text/html", resp);
 }
 
