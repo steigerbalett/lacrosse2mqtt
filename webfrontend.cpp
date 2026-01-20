@@ -38,32 +38,38 @@ extern Adafruit_SSD1306 display;
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "RC3-260120"
+#define LACROSSE2MQTT_VERSION  "2026.1"
 #endif
 
-// 16x16 Pixel Thermometer Favicon (318 Bytes)
+// 16x16 Pixel Thermometer Favicon
 const uint8_t favicon_ico[] PROGMEM = {
-  0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00, 0x04, 0x00, 0x28, 0x01,
-  0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x20, 0x00,
-  0x00, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x99, 0x99,
-  0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21,
-  0x00, 0x00, 0x00, 0x24, 0x20, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24,
-  0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x14, 0x41, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x04,
-  0x40, 0x00, 0x00, 0x14, 0x41, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x22, 0x22, 0x00, 0x00, 0x02,
-  0x20, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xE7, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3,
-  0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF, 0x00,
-  0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3,
-  0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00
+    0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00,
+    0x04, 0x00, 0x28, 0x01, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x28, 0x00,
+    0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x01, 0x00,
+    0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
+    0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21,
+    0x00, 0x00, 0x00, 0x24, 0x20, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24,
+    0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x14,
+    0x41, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x14,
+    0x41, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x22, 0x22, 0x00, 0x00, 0x02,
+    0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF,
+    0xE7, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF,
+    0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF,
+    0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF,
+    0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF,
+    0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00
 };
-
 
 static WebServer server(80);
 static HTTPUpdateServer httpUpdater;
@@ -141,17 +147,20 @@ bool load_idmap()
 
 bool load_config()
 {
-    config.display_on = true; // default
-    config.ha_discovery = false; // default
-    config.debug_mode = false; // default - NEU
+    config.display_on = true; /* default */
+    config.ha_discovery = false; /* default */
+    config.debug_mode = false; /* default */
+    config.screensaver_mode = false; /* default - NEU */
     
     if (!littlefs_ok)
         return false;
+    
     File cfg = LittleFS.open("/config.json");
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, cfg);
+    
     if (error) {
-        Serial.println("Failed to read /config.json");
+        Serial.println("Failed to read config.json");
         Serial.print("error code: ");
         Serial.println(error.code());
     } else {
@@ -173,24 +182,23 @@ bool load_config()
             config.display_on = doc["display_on"];
         if (!doc["ha_discovery"].isNull())
             config.ha_discovery = doc["ha_discovery"];
-        if (!doc["debug_mode"].isNull())  // NEU
+        if (!doc["debug_mode"].isNull())
             config.debug_mode = doc["debug_mode"];
+        if (!doc["screensaver_mode"].isNull())  // NEU
+            config.screensaver_mode = doc["screensaver_mode"];
             
-        Serial.println("result of config.json: "
-                       "mqtt_server '" + config.mqtt_server + "' "
-                       "mqtt_port: " + String(config.mqtt_port) + " "
-                       "mqtt_user: '" + config.mqtt_user + "' "
-                       "ha_discovery: " + String(config.ha_discovery)+ " "
-                       "display_on: " + String(config.display_on) + " "
-                       "debug_mode: " + String(config.debug_mode));  // NEU
-        cfg.close();
-        Serial.println("--- raw config.json start ---");
-        cfg = LittleFS.open("/config.json");
-        Serial.println(read_file(cfg));
-        Serial.println("---- raw config.json end ----");
-        config.changed = true;
+        Serial.println("result of config.json");
+        Serial.println("mqtt_server: " + config.mqtt_server);
+        Serial.println("mqtt_port: " + String(config.mqtt_port));
+        Serial.println("mqtt_user: " + config.mqtt_user);
+        Serial.println("ha_discovery: " + String(config.ha_discovery));
+        Serial.println("display_on: " + String(config.display_on));
+        Serial.println("debug_mode: " + String(config.debug_mode));
+        Serial.println("screensaver_mode: " + String(config.screensaver_mode)); // NEU
     }
+    
     cfg.close();
+    config.changed = true;
     return !error;
 }
 
@@ -199,10 +207,12 @@ bool save_config()
     bool ret = true;
     LittleFS.remove("/config.json");
     File cfg = LittleFS.open("/config.json", FILE_WRITE);
+    
     if (! cfg) {
-        Serial.println("Failed to open /config.json for writing");
+        Serial.println("Failed to open config.json for writing");
         return false;
     }
+    
     JsonDocument doc;
     doc["mqtt_port"] = config.mqtt_port;
     doc["mqtt_server"] = config.mqtt_server;
@@ -210,18 +220,21 @@ bool save_config()
     doc["mqtt_pass"] = config.mqtt_pass;
     doc["display_on"] = config.display_on;
     doc["ha_discovery"] = config.ha_discovery;
-    doc["debug_mode"] = config.debug_mode;  // NEU
+    doc["debug_mode"] = config.debug_mode;
+    doc["screensaver_mode"] = config.screensaver_mode;  // NEU
     
     if (serializeJson(doc, cfg) == 0) {
-        Serial.println(F("Failed to write /config.json"));
+        Serial.println("FFailed to write config.json");
         ret = false;
     }
+    
     cfg.close();
-    Serial.println("---written config.json:");
+    Serial.println("---written config.json");
     cfg = LittleFS.open("/config.json");
     Serial.println(read_file(cfg));
     cfg.close();
-    Serial.println("---end config.json:");
+    Serial.println("---end config.json");
+    
     return ret;
 }
 
@@ -288,110 +301,249 @@ bool save_idmap()
 void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
-    String h;
-    s += "<table class=\"sensors\">\n";
-    s += "<thead><tr>"
-         "<th>ID</th>"
-         "<th>Temperature</th>"
-         "<th>Humidity</th>"
-         "<th>RSSI</th>"
-         "<th>Name</th>"
-         "<th>Age (ms)</th>"
-         "<th>Battery</th>"
-         "<th>New Batt</th>";
+    
+    s += "<h2>Current sensor data</h2>\n";
+    s += "<table>\n";
+    s += "<thead><tr>";
+    s += "<th>ID</th>";
+    s += "<th>Ch</th>";
+    s += "<th>Type</th>";
+    s += "<th>Temperature</th>";
+    s += "<th>Humidity</th>";
+    s += "<th>RSSI</th>";
+    s += "<th>Name</th>";
+    s += "<th>Age (ms)</th>";
+    s += "<th>Battery</th>";
+    s += "<th>New Batt</th>";
     if (rawdata)
         s += "<th>Raw Frame Data</th>";
-    s += "</tr></thead>\n<tbody>\n";
+    s += "</tr></thead>\n";
+    s += "<tbody>\n";
 
-    for (int cacheIndex = 0; cacheIndex < SENSOR_NUM; cacheIndex++) {
-        if (fcache[cacheIndex].timestamp == 0 || !fcache[cacheIndex].valid)
+    int sensorCount = 0;
+    
+    for (int i = 0; i < SENSOR_NUM; i++)
+    {
+        // Überspringe leere Einträge
+        if (fcache[i].timestamp == 0)
             continue;
         
-        // Berechne Original-ID zurück
-        byte originalID = cacheIndex;
-        if (fcache[cacheIndex].channel == 2) {
-            originalID = cacheIndex - 64;
-        }
-        
-        String name = id2name[originalID];
+        // Überspringe ungültige IDs
+        if (fcache[i].ID == 0xFF)
+            continue;
+            
+        sensorCount++;
+
+        String name = id2name[fcache[i].ID];
         if (name.length() == 0)
             name = "-";
-        if (fcache[cacheIndex].channel == 2)
-            name += " (Ch2)";
+
+        // ID ist die Originale
+        int displayID = fcache[i].ID;
         
-        // ID mit Kanal-Info
-        String idDisplay = String(originalID);
-        if (fcache[cacheIndex].channel == 2)
-            idDisplay += " (Ch2)";
-        
+        // Sensor-Typ aus Cache
+        String sensorType = String(fcache[i].sensorType);
+        if (sensorType.length() == 0)
+            sensorType = "LaCrosse";
+
         s += "<tr>";
-        s += "<td>" + idDisplay + "</td>";  // ID + Channel kombiniert
-        s += "<td>" + String(fcache[cacheIndex].temp, 1) + "°C</td>";
         
-        if (fcache[cacheIndex].humi > 0 && fcache[cacheIndex].humi <= 100) {
-            s += "<td>" + String(fcache[cacheIndex].humi) + "%</td>";
+        // ID
+        s += "<td>" + String(displayID) + "</td>";
+        
+        // Channel
+        s += "<td>" + String(fcache[i].channel) + "</td>";
+        
+        // Type
+        s += "<td>" + sensorType + "</td>";
+
+        // Temperatur
+        s += "<td>" + String(fcache[i].temp, 1) + " °C</td>";
+
+        // Luftfeuchtigkeit
+        if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
+            s += "<td>" + String(fcache[i].humi) + " %</td>";
         } else {
             s += "<td>-</td>";
         }
-        
-        s += "<td>" + String(fcache[cacheIndex].rssi) + "</td>";
+
+        // RSSI
+        s += "<td>" + String(fcache[i].rssi) + "</td>";
+
+        // Name
         s += "<td>" + name + "</td>";
-        s += "<td>" + String(now - fcache[cacheIndex].timestamp) + "</td>";
-        
-        String battText = fcache[cacheIndex].batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
-        String initText = fcache[cacheIndex].init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
-        s += "<td>" + battText + "</td>";
-        s += "<td>" + initText + "</td>";
-        
+
+        // Age
+        unsigned long age = now - fcache[i].timestamp;
+        s += "<td>" + String(age) + "</td>";
+
+        // Battery mit Farbe
+        if (fcache[i].batlo) {
+            s += "<td class='batt-weak'>weak</td>";
+        } else {
+            s += "<td class='batt-ok'>ok</td>";
+        }
+
+        // Init
+        if (fcache[i].init) {
+            s += "<td class='init-new'>yes</td>";
+        } else {
+            s += "<td class='init-no'>no</td>";
+        }
+
+        // Raw data (optional)
         if (rawdata) {
-            s += "<td class=\"rawdata\">0x";
+            s += "<td class='raw-data'>0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
                 char tmp[3];
-                snprintf(tmp, 3, "%02X", fcache[cacheIndex].data[j]);
+                snprintf(tmp, 3, "%02X", fcache[j].data[j]);
                 s += String(tmp);
             }
             s += "</td>";
         }
+
         s += "</tr>\n";
     }
     
-    s += "</tbody></table>\n";
+    s += "</tbody>\n";
+    s += "</table>\n";
+    
+    // Info-Zeile
+    if (sensorCount == 0) {
+        s += "<p><em>No sensors found. Waiting for data...</em></p>\n";
+    } else {
+        s += "<p><em>Total sensors: " + String(sensorCount) + "</em></p>\n";
+    }
 }
-
 
 
 void add_header(String &s, String title)
 {
-    s += "<!DOCTYPE HTML><html lang=\"en\"><head>\n"
-        "<meta charset=\"utf-8\">\n"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-        "<meta name=\"description\" content=\"lacrosse sensors to mqtt converter\">\n"
-        "<link rel=\"icon\" href=\"/favicon.ico\" type=\"image/x-icon\">\n"
-        "<title>" + title + "</title>\n"
-        "<style>\n"
-        "body {\n"
-        " font-family: Arial, Helvetica, sans-serif;\n"
-        "}\n"
-        ".sensors {\n"
-        " border-collapse: collapse;\n"
-        " width: 100%;\n"
-        " max-width: 1200px;\n"
-        "}\n"
-        ".sensors th, .sensors td {\n"
-        " border: 1px solid #ddd;\n"
-        " padding: 8px;\n"
-        " text-align: right;\n"
-        "}\n"
-        ".sensors th { background-color: #f2f2f2; }\n"
-        ".sensors .stale { background-color: #f0f0f0; }\n"
-        ".batt-weak { color: red; }\n"
-        ".batt-ok { color: green; }\n"
-        ".init-new { color: orange; }\n"
-        ".init-no { color: gray; }\n"
-        ".rawdata { font-family: monospace; font-size: 10pt; text-align: left; }\n"
-        "</style>\n"
-        "</head>\n<body>\n"
-        "<H1>" + title + "</H1>\n";
+    s = "<!DOCTYPE HTML><html><head>"
+        "<meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<meta name=\"description\" content=\"lacrosse sensors to mqtt converter\">"
+        "<link rel=\"icon\" href=\"/favicon.ico\" type=\"image/x-icon\">"
+        "<style>"
+        "body { "
+            "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; "
+            "margin: 0; "
+            "padding: 20px; "
+            "background-color: #f5f5f5; "
+        "}"
+        "h1, h2, h3 { "
+            "color: #333; "
+        "}"
+        "h2 { "
+            "margin-top: 30px; "
+            "border-bottom: 2px solid #4CAF50; "
+            "padding-bottom: 10px; "
+        "}"
+        "table { "
+            "border-collapse: collapse; "
+            "width: 100%; "
+            "margin: 20px 0; "
+            "background-color: white; "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
+            "font-size: 14px; "
+        "}"
+        "thead { "
+            "background-color: #4CAF50; "
+            "color: white; "
+        "}"
+        "th { "
+            "padding: 12px 8px; "
+            "text-align: left; "
+            "font-weight: 600; "
+            "text-transform: uppercase; "
+            "font-size: 12px; "
+            "letter-spacing: 0.5px; "
+        "}"
+        "td { "
+            "padding: 10px 8px; "
+            "border-bottom: 1px solid #ddd; "
+        "}"
+        "tbody tr:hover { "
+            "background-color: #f0f8ff; "
+        "}"
+        "tbody tr:nth-child(even) { "
+            "background-color: #f9f9f9; "
+        "}"
+        ".batt-weak { "
+            "color: #d32f2f; "
+            "font-weight: bold; "
+            "background-color: #ffebee; "
+        "}"
+        ".batt-ok { "
+            "color: #388e3c; "
+            "font-weight: bold; "
+        "}"
+        ".init-new { "
+            "color: #1976d2; "
+            "font-weight: bold; "
+        "}"
+        ".init-no { "
+            "color: #757575; "
+        "}"
+        ".raw-data { "
+            "font-family: 'Courier New', monospace; "
+            "font-size: 12px; "
+            "background-color: #f5f5f5; "
+        "}"
+        "form { "
+            "background-color: white; "
+            "padding: 20px; "
+            "margin: 20px 0; "
+            "border-radius: 4px; "
+            "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
+        "}"
+        "input[type='text'], input[type='number'] { "
+            "width: 100%; "
+            "padding: 8px; "
+            "margin: 5px 0; "
+            "border: 1px solid #ddd; "
+            "border-radius: 4px; "
+            "box-sizing: border-box; "
+        "}"
+        "input[type='submit'], input[type='button'] { "
+            "background-color: #4CAF50; "
+            "color: white; "
+            "padding: 10px 20px; "
+            "margin: 10px 5px 0 0; "
+            "border: none; "
+            "border-radius: 4px; "
+            "cursor: pointer; "
+            "font-size: 14px; "
+        "}"
+        "input[type='submit']:hover, input[type='button']:hover { "
+            "background-color: #45a049; "
+        "}"
+        "input[type='radio'] { "
+            "margin: 0 5px 0 15px; "
+        "}"
+        "label { "
+            "margin-right: 15px; "
+        "}"
+        "p { "
+            "color: #666; "
+        "}"
+        "em { "
+            "color: #888; "
+        "}"
+        "a { "
+            "color: #4CAF50; "
+            "text-decoration: none; "
+        "}"
+        "a:hover { "
+            "text-decoration: underline; "
+        "}"
+        "@media (max-width: 768px) { "
+            "table { font-size: 12px; } "
+            "th, td { padding: 8px 4px; } "
+        "}"
+        "</style>"
+        "<title>" + title + "</title></head><body>"
+        "<h1>" + title + "</h1>";
 }
 
 /* from tasmota */
@@ -437,7 +589,6 @@ void add_sysinfo_footer(String &s)
         "</p>\n";
 }
 
-//void handle_index() {
 void handle_index() {
     // TODO: use server.hostHeader()?
     String IP = WiFi.localIP().toString();
@@ -504,6 +655,16 @@ void handle_config() {
             config_changed = true;
             config.debug_mode = tmp;
             Serial.println("Debug mode changed to: " + String(config.debug_mode));
+        }
+    }
+    // NEU: Screensaver Mode Handler
+    if (server.hasArg("screensaver_mode")) {
+        String _on = server.arg("screensaver_mode");
+        int tmp = _on.toInt();
+        if (tmp != config.screensaver_mode) {
+            config_changed = true;
+            config.screensaver_mode = tmp;
+            Serial.println("Screensaver mode changed to: " + String(config.screensaver_mode));
         }
     }
     if (server.hasArg("cancel")) {
@@ -599,11 +760,6 @@ void handle_config() {
     }
     resp += "<p></p>\n"
             "<form action=\"/config.html\">"
-#if 0
-            "Display always on <b>" + (config.display_on ? on : off) + "</b>."
-            "<input type=\"hidden\" name=\"display\" value=\"" + String(!config.display_on) +
-            "\"><button type=\"submit\">Switch to default " + (config.display_on ? off : on) + "</button>"
-#endif
             "<table><tr>"
             "<td>Display always on</td>"
             "<td><input type=\"radio\" id=\"d_on\" name=\"display\" value=\"1\" " + (config.display_on?checked:String()) + "/>"
@@ -624,6 +780,13 @@ void handle_config() {
             "<label for=\"dbg_on\">on</label></td>"
             "<td><input type=\"radio\" id=\"dbg_off\" name=\"debug_mode\" value=\"0\"" + (config.debug_mode?String():checked) + "/>"
             "<label for=\"dbg_off\">off</label></td>"
+            "<td><button type=\"submit\">Submit</button></td>"
+            "</tr><tr>"  // NEU: Screensaver innerhalb der Tabelle
+            "<td>Screensaver after 5min</td>"
+            "<td><input type=\"radio\" id=\"ssaver_on\" name=\"screensaver_mode\" value=\"1\"" + (config.screensaver_mode?checked:String()) + "/>"
+            "<label for=\"ssaver_on\">on</label></td>"
+            "<td><input type=\"radio\" id=\"ssaver_off\" name=\"screensaver_mode\" value=\"0\"" + (config.screensaver_mode?String():checked) + "/>"
+            "<label for=\"ssaver_off\">off</label></td>"
             "<td><button type=\"submit\">Submit</button></td>"
             "</tr></table>"
             "</form>\n";
