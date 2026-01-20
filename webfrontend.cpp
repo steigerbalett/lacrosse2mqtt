@@ -9,13 +9,61 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+// Debug-Log Buffer (ringbuffer für letzte 100 Frames)
+#define DEBUG_LOG_SIZE 100
+struct DebugEntry {
+    unsigned long timestamp;
+    uint8_t data[FRAME_LENGTH];
+    int8_t rssi;
+    int rate;
+    bool valid;
+};
+DebugEntry debug_log[DEBUG_LOG_SIZE];
+int debug_log_index = 0;
+unsigned long debug_log_counter = 0;
+
+void add_debug_log(uint8_t *data, int8_t rssi, int datarate, bool valid) {
+    if (!config.debug_mode) return;
+    debug_log[debug_log_index].timestamp = millis();
+    memcpy(debug_log[debug_log_index].data, data, FRAME_LENGTH);
+    debug_log[debug_log_index].rssi = rssi;
+    debug_log[debug_log_index].rate = datarate;
+    debug_log[debug_log_index].valid = valid;
+    debug_log_index = (debug_log_index + 1) % DEBUG_LOG_SIZE;
+    debug_log_counter++;
+}
+
 extern uint32_t auto_display_on;
 extern Adafruit_SSD1306 display; 
 
 /* git version passed by compile.sh */
 #ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "DEV260119"
+#define LACROSSE2MQTT_VERSION  "RC3-260120"
 #endif
+
+// 16x16 Pixel Thermometer Favicon (318 Bytes)
+const uint8_t favicon_ico[] PROGMEM = {
+  0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00, 0x04, 0x00, 0x28, 0x01,
+  0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x20, 0x00,
+  0x00, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x99, 0x99,
+  0x99, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21,
+  0x00, 0x00, 0x00, 0x24, 0x20, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24,
+  0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x14, 0x41, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x04,
+  0x40, 0x00, 0x00, 0x14, 0x41, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x22, 0x22, 0x00, 0x00, 0x02,
+  0x20, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xE7, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3,
+  0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF, 0x00,
+  0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3,
+  0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00
+};
+
 
 static WebServer server(80);
 static HTTPUpdateServer httpUpdater;
@@ -95,6 +143,8 @@ bool load_config()
 {
     config.display_on = true; // default
     config.ha_discovery = false; // default
+    config.debug_mode = false; // default - NEU
+    
     if (!littlefs_ok)
         return false;
     File cfg = LittleFS.open("/config.json");
@@ -123,12 +173,16 @@ bool load_config()
             config.display_on = doc["display_on"];
         if (!doc["ha_discovery"].isNull())
             config.ha_discovery = doc["ha_discovery"];
+        if (!doc["debug_mode"].isNull())  // NEU
+            config.debug_mode = doc["debug_mode"];
+            
         Serial.println("result of config.json: "
                        "mqtt_server '" + config.mqtt_server + "' "
                        "mqtt_port: " + String(config.mqtt_port) + " "
                        "mqtt_user: '" + config.mqtt_user + "' "
                        "ha_discovery: " + String(config.ha_discovery)+ " "
-                       "display_on: " + String(config.display_on));
+                       "display_on: " + String(config.display_on) + " "
+                       "debug_mode: " + String(config.debug_mode));  // NEU
         cfg.close();
         Serial.println("--- raw config.json start ---");
         cfg = LittleFS.open("/config.json");
@@ -156,6 +210,8 @@ bool save_config()
     doc["mqtt_pass"] = config.mqtt_pass;
     doc["display_on"] = config.display_on;
     doc["ha_discovery"] = config.ha_discovery;
+    doc["debug_mode"] = config.debug_mode;  // NEU
+    
     if (serializeJson(doc, cfg) == 0) {
         Serial.println(F("Failed to write /config.json"));
         ret = false;
@@ -247,38 +303,43 @@ void add_current_table(String &s, bool rawdata)
         s += "<th>Raw Frame Data</th>";
     s += "</tr></thead>\n<tbody>\n";
 
-    // Zeige ALLE aktiven IDs einzeln an
-    for (int id = 0; id < SENSOR_NUM; id++) {
-        if (fcache[id].timestamp == 0 || !fcache[id].valid)
+    for (int cacheIndex = 0; cacheIndex < SENSOR_NUM; cacheIndex++) {
+        if (fcache[cacheIndex].timestamp == 0 || !fcache[cacheIndex].valid)
             continue;
         
-        byte baseID = id >= 64 ? (id - 64) : id;
-        bool isChannel2 = (id >= 64);
+        // Berechne Original-ID zurück
+        byte originalID = cacheIndex;
+        if (fcache[cacheIndex].channel == 2) {
+            originalID = cacheIndex - 64;
+        }
         
-        // Name
-        String name = id2name[baseID];
+        String name = id2name[originalID];
         if (name.length() == 0)
             name = "-";
-        if (isChannel2)
+        if (fcache[cacheIndex].channel == 2)
             name += " (Ch2)";
         
-        s += "<tr>";
-        s += "<td>" + String(id) + "</td>";
-        s += "<td>" + String(fcache[id].temp, 1) + "°C</td>";
+        // ID mit Kanal-Info
+        String idDisplay = String(originalID);
+        if (fcache[cacheIndex].channel == 2)
+            idDisplay += " (Ch2)";
         
-        // Humidity
-        if (fcache[id].humi > 0 && fcache[id].humi <= 100) {
-            s += "<td>" + String(fcache[id].humi) + "%</td>";
+        s += "<tr>";
+        s += "<td>" + idDisplay + "</td>";  // ID + Channel kombiniert
+        s += "<td>" + String(fcache[cacheIndex].temp, 1) + "°C</td>";
+        
+        if (fcache[cacheIndex].humi > 0 && fcache[cacheIndex].humi <= 100) {
+            s += "<td>" + String(fcache[cacheIndex].humi) + "%</td>";
         } else {
             s += "<td>-</td>";
         }
         
-        s += "<td>" + String(fcache[id].rssi) + "</td>";
+        s += "<td>" + String(fcache[cacheIndex].rssi) + "</td>";
         s += "<td>" + name + "</td>";
-        s += "<td>" + String(now - fcache[id].timestamp) + "</td>";
+        s += "<td>" + String(now - fcache[cacheIndex].timestamp) + "</td>";
         
-        String battText = fcache[id].batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
-        String initText = fcache[id].init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
+        String battText = fcache[cacheIndex].batlo ? "<span class=\"batt-weak\"><b>WEAK!</b></span>" : "<span class=\"batt-ok\">OK</span>";
+        String initText = fcache[cacheIndex].init ? "<span class=\"init-new\"><b>NEW!</b></span>" : "<span class=\"init-no\">No</span>";
         s += "<td>" + battText + "</td>";
         s += "<td>" + initText + "</td>";
         
@@ -286,7 +347,7 @@ void add_current_table(String &s, bool rawdata)
             s += "<td class=\"rawdata\">0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
                 char tmp[3];
-                snprintf(tmp, 3, "%02X", fcache[id].data[j]);
+                snprintf(tmp, 3, "%02X", fcache[cacheIndex].data[j]);
                 s += String(tmp);
             }
             s += "</td>";
@@ -297,12 +358,15 @@ void add_current_table(String &s, bool rawdata)
     s += "</tbody></table>\n";
 }
 
+
+
 void add_header(String &s, String title)
 {
     s += "<!DOCTYPE HTML><html lang=\"en\"><head>\n"
         "<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
         "<meta name=\"description\" content=\"lacrosse sensors to mqtt converter\">\n"
+        "<link rel=\"icon\" href=\"/favicon.ico\" type=\"image/x-icon\">\n"
         "<title>" + title + "</title>\n"
         "<style>\n"
         "body {\n"
@@ -433,6 +497,15 @@ void handle_config() {
             config_changed = false;
         }
     }
+    if (server.hasArg("debug_mode")) {
+        String _on = server.arg("debug_mode");
+        int tmp = _on.toInt();
+        if (tmp != config.debug_mode) {
+            config_changed = true;
+            config.debug_mode = tmp;
+            Serial.println("Debug mode changed to: " + String(config.debug_mode));
+        }
+    }
     if (server.hasArg("cancel")) {
         if (server.arg("cancel") == String(token)) {
             load_idmap();
@@ -545,14 +618,88 @@ void handle_config() {
             "<td><input type=\"radio\" id=\"ha_off\" name=\"ha_disc\" value=\"0\"" + (config.ha_discovery?String():checked) + "/>"
             "<label for=\"ha_off\">off</label></td>"
             "<td><button type=\"submit\">Submit</button></td>"
+            "</tr><tr>"
+            "<td>Debug Mode (RAW frames)</td>"
+            "<td><input type=\"radio\" id=\"dbg_on\" name=\"debug_mode\" value=\"1\" " + (config.debug_mode?checked:String()) + "/>"
+            "<label for=\"dbg_on\">on</label></td>"
+            "<td><input type=\"radio\" id=\"dbg_off\" name=\"debug_mode\" value=\"0\"" + (config.debug_mode?String():checked) + "/>"
+            "<label for=\"dbg_off\">off</label></td>"
+            "<td><button type=\"submit\">Submit</button></td>"
             "</tr></table>"
             "</form>\n";
-    resp += "<p><a href=\"/update\">Update software</a></p>\n"
-            "<p><a href=\"/\">Main page</a></p>\n";
+    
+    resp += "<p><a href=\"/update\">Update software</a></p>\n";
+    if (config.debug_mode) {
+        resp += "<p><a href=\"/debug.html\">Debug Log</a></p>\n";
+    }
+    resp += "<p><a href=\"/\">Main page</a></p>\n";
     add_sysinfo_footer(resp);
     resp += "</body></html>\n";
     server.send(200, "text/html", resp);
 }
+
+void handle_debug() {
+    String resp;
+    add_header(resp, "LaCrosse2mqtt Debug Log");
+    
+    resp += "<p>Debug Mode: <b>" + String(config.debug_mode ? "ENABLED" : "DISABLED") + "</b></p>\n";
+    resp += "<p>Total Frames Received: <b>" + String(debug_log_counter) + "</b></p>\n";
+    resp += "<p><a href=\"/debug.html\">Refresh</a> | <a href=\"/config.html\">Configuration</a> | <a href=\"/\">Main page</a></p>\n";
+    
+    // Auto-Refresh alle 5 Sekunden wenn Debug aktiv
+    if (config.debug_mode) {
+        resp += "<meta http-equiv=\"refresh\" content=\"5\">\n";
+    }
+    
+    resp += "<table class=\"sensors\">\n";
+    resp += "<thead><tr>"
+            "<th>#</th>"
+            "<th>Time (ms)</th>"
+            "<th>Raw Frame Data</th>"
+            "<th>RSSI</th>"
+            "<th>Rate</th>"
+            "<th>Valid</th>"
+            "</tr></thead>\n<tbody>\n";
+    
+    // Zeige neueste Einträge zuerst (rückwärts durch Ringbuffer)
+    int count = 0;
+    int max_display = (debug_log_counter < DEBUG_LOG_SIZE) ? debug_log_counter : DEBUG_LOG_SIZE;
+    
+    for (int i = 0; i < max_display; i++) {
+        int idx = (debug_log_index - 1 - i + DEBUG_LOG_SIZE) % DEBUG_LOG_SIZE;
+        if (debug_log[idx].timestamp == 0) continue;
+        
+        unsigned long age = millis() - debug_log[idx].timestamp;
+        
+        resp += "<tr>";
+        resp += "<td>" + String(debug_log_counter - i) + "</td>";
+        resp += "<td>" + String(age) + "</td>";
+        
+        // Raw Data
+        resp += "<td class=\"rawdata\">0x";
+        for (int j = 0; j < FRAME_LENGTH; j++) {
+            char tmp[3];
+            snprintf(tmp, 3, "%02X", debug_log[idx].data[j]);
+            resp += String(tmp);
+            if (j < FRAME_LENGTH - 1) resp += " ";
+        }
+        resp += "</td>";
+        
+        resp += "<td>" + String(debug_log[idx].rssi) + "</td>";
+        resp += "<td>" + String(debug_log[idx].rate) + "</td>";
+        resp += "<td>" + String(debug_log[idx].valid ? "✓" : "✗") + "</td>";
+        resp += "</tr>\n";
+        
+        count++;
+        if (count >= 50) break; // Maximal 50 Einträge anzeigen
+    }
+    
+    resp += "</tbody></table>\n";
+    add_sysinfo_footer(resp);
+    resp += "</body></html>\n";
+    server.send(200, "text/html", resp);
+}
+
 
 void setup_web()
 {
@@ -560,13 +707,16 @@ void setup_web()
         Serial.println("setup_web ERROR: load_idmap() failed?");
     if (!load_config())
         Serial.println("setup_web ERROR: load_config() failed?");
+    
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
     server.on("/config.html", handle_config);
+    server.on("/debug.html", handle_debug);  // NEU
+    
     server.on("/favicon.ico", HTTP_GET, []() {
-        server.sendHeader("Location", "https://github.com/steigerbalett/lacrosse2mqtt/raw/master/favicon.ico", true);
-        server.send(302, "text/plain", "");
+        server.send_P(200, "image/x-icon", (const char*)favicon_ico, sizeof(favicon_ico));
     });
+
     server.onNotFound([](){
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
         Serial.println("404: " + server.uri());

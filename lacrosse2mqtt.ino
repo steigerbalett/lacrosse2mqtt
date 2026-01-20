@@ -35,7 +35,7 @@
  * or a wifi change event */
 #define DISPLAY_TIMEOUT 300
 
-bool DEBUG_MODE = 0;
+//bool DEBUG_MODE = 0;
 const int interval = 20;   /* toggle interval in seconds */
 const int freq = 868290;   /* frequency in kHz, 868300 did not receive all sensors... */
 
@@ -205,13 +205,13 @@ void pub_hass_config(int what, byte ID)
                 "\"identifiers\":[\"" + device_id + "\"],"
                 "\"name\":\"" + where + " Sensor\","
                 "\"manufacturer\":\"Lacrosse2MQTT\","
-                "\"sw_version\":\"v2026\","
+                "\"sw_version\":\"v2026.1\","
                 "\"model\":\"heltec_wifi_lora_32_V2\""
             "},"
             "\"origin\":{"
                 "\"name\":\"lacrosse2mqtt\","
                 "\"url\":\"https://github.com/steigerbalett/lacrosse2mqtt\","
-                "\"sw_version\":\"v2026\""
+                "\"sw_version\":\"v2026.1\""
             "},"
             "\"state_class\":\"measurement\","
             "\"device_class\":\"" + dclass[what]+ "\","
@@ -387,7 +387,6 @@ void update_display(LaCrosse::Frame *frame)
     }
 }
 
-
 void receive()
 {
     byte *payload;
@@ -401,77 +400,94 @@ void receive()
     rate = SX.GetDataRate();
     payload = SX.GetPayloadPointer();
 
-    if (DEBUG_MODE) {
-        Serial.print("\nEnd receiving, HEX raw data: ");
-        for (int i = 0; i < 16; i++) {
+    if (config.debug_mode) {
+        Serial.print("\n[DEBUG] End receiving, HEX raw data: ");
+        for (int i = 0; i < payLoadSize; i++) {
+            if (payload[i] < 16) Serial.print("0");
             Serial.print(payload[i], HEX);
             Serial.print(" ");
         }
-        Serial.println();
+        Serial.print(" RSSI:");
+        Serial.print(rssi);
+        Serial.print(" Rate:");
+        Serial.println(rate);
     }
 
     LaCrosse::Frame frame;
     frame.rate = rate;
-    if (LaCrosse::TryHandleData(payload, &frame)) {
-    byte ID = frame.ID;  // ID ist bereits korrekt (+64 für Ch2)
-        
-    LaCrosse::Frame oldframe;
-    LaCrosse::TryHandleData(fcache[ID].data, &oldframe);
-    fcache[ID].rssi = rssi;
-    fcache[ID].timestamp = millis();
-    memcpy(&fcache[ID].data, payload, FRAME_LENGTH);
-    fcache[ID].temp = frame.temp;
-    fcache[ID].humi = frame.humi;
-    fcache[ID].batlo = frame.batlo;
-    fcache[ID].init = frame.init;
-    fcache[ID].valid = frame.valid;
-    frame.rssi = rssi;
-    LaCrosse::DisplayFrame(payload, &frame);
     
-    String pub = pub_base + String(ID, DEC) + "/";
-    mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+    // NEU: Frame validieren und IMMER im Debug-Log speichern
+    bool frame_valid = LaCrosse::TryHandleData(payload, &frame);
     
-    if (frame.humi > 0 && frame.humi <= 100)
-        mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+    // Debug-Log aufrufen (auch für ungültige Frames!)
+    add_debug_log(payload, rssi, rate, frame_valid);
     
-    // Kanal-Erkennung für MQTT state
-    bool isChannel2 = (ID >= 64);
-    byte baseID = isChannel2 ? (ID - 64) : ID;
-    
-    String state = ""
-        "{\"low_batt\": " + String(frame.batlo?"true":"false") +
-         ", \"init\": " + String(frame.init?"true":"false") +
-         ", \"RSSI\": " + String(rssi, DEC) +
-         ", \"baud\": " + String(frame.rate / 1000.0, 3) +
-         ", \"channel\": " + String(isChannel2 ? 2 : 1) +
-         "}";
-    mqtt_client.publish((pub + "state").c_str(), state.c_str());
-    
-    // Pretty names
-    if (id2name[baseID].length() > 0) {
-        String sensorName = id2name[baseID];
-        if (isChannel2) {
-            sensorName += "_Ch2";
+    if (frame_valid) {
+        byte ID = frame.ID;
+
+        // Bestimme Cache-Index: Kanal 2 -> ID+64
+        byte cacheIndex = ID;
+        if (frame.channel == 2) {
+            cacheIndex = ID + 64;  // Kanal 2 separat speichern
         }
+
+        LaCrosse::Frame oldframe;
+        LaCrosse::TryHandleData(fcache[cacheIndex].data, &oldframe);
+        fcache[cacheIndex].rssi = rssi;
+        fcache[cacheIndex].timestamp = millis();
+        memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
+        fcache[cacheIndex].temp = frame.temp;
+        fcache[cacheIndex].humi = frame.humi;
+        fcache[cacheIndex].batlo = frame.batlo;
+        fcache[cacheIndex].init = frame.init;
+        fcache[cacheIndex].valid = frame.valid;
+        fcache[cacheIndex].channel = frame.channel;
         
-        pub = pretty_base + sensorName + "/";
+        frame.rssi = rssi;
+        LaCrosse::DisplayFrame(payload, &frame);
         
-        if (abs(oldframe.temp - frame.temp) > 2.0)
-            Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp,1));
-        else {
-            pub_hass_config(1, baseID);  // WICHTIG: Nutze baseID für Config!
-            mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
-        }
+        // MQTT: Publiziere mit cacheIndex (für Kanal-Trennung)
+        String pub = pub_base + String(cacheIndex, DEC) + "/";
+        mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
         
-        if (frame.humi > 0 && frame.humi <= 100) {
-            if (abs(oldframe.humi - frame.humi) > 10)
-                Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
+        if (frame.humi > 0 && frame.humi <= 100)
+            mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+        
+        // MQTT state mit Kanal-Info
+        String state = ""
+            "{\"low_batt\": " + String(frame.batlo?"true":"false") +
+             ", \"init\": " + String(frame.init?"true":"false") +
+             ", \"RSSI\": " + String(rssi, DEC) +
+             ", \"baud\": " + String(frame.rate / 1000.0, 3) +
+             ", \"channel\": " + String(frame.channel) +
+             "}";
+        mqtt_client.publish((pub + "state").c_str(), state.c_str());
+        
+        // Pretty names mit Original-ID
+        if (id2name[ID].length() > 0) {
+            String sensorName = id2name[ID];
+            if (frame.channel == 2) {
+                sensorName += "_Ch2";
+            }
+            
+            pub = pretty_base + sensorName + "/";
+            
+            if (abs(oldframe.temp - frame.temp) > 2.0)
+                Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp,1));
             else {
-                pub_hass_config(0, baseID);  // WICHTIG: Nutze baseID für Config!
-                mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+                pub_hass_config(1, ID);
+                mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+            }
+            
+            if (frame.humi > 0 && frame.humi <= 100) {
+                if (abs(oldframe.humi - frame.humi) > 10)
+                    Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
+                else {
+                    pub_hass_config(0, ID);
+                    mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+                }
             }
         }
-    }
 
     } else {
         static unsigned long last;
@@ -509,6 +525,10 @@ void setup(void)
     if (!littlefs_ok)
         Serial.println("LittleFS Mount Failed");
     setup_web(); /* also loads config from LittleFS */
+
+    if (config.debug_mode) {
+        Serial.println("Debug Mode ENABLED");
+    }
 
     pinMode(KEY_BUILTIN, INPUT);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -664,3 +684,4 @@ void loop(void)
         showing_starfield = false;  // Display ist aus
     }
 }
+

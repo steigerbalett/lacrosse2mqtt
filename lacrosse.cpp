@@ -17,6 +17,7 @@
 * more details:
 * [https://github.com/merbanan/rtl_433/blob/master/src/devices/lacrosse_tx35.c](https://github.com/merbanan/rtl_433/blob/master/src/devices/lacrosse_tx35.c)
 */
+
 void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
 {
     f->valid = true;
@@ -41,17 +42,30 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     f->batlo = (bytes[3] & 0x80) ? 1 : 0;
     f->humi  = bytes[3] & 0x7f;
     
-    // Kanal 2 Erkennung - verschiedene Sensoren verwenden verschiedene Magic Values:
+    // Kanal-Erkennung: NUR bei exakten Magic Values!
+    f->channel = 1;  // Default: Kanal 1
+    
+    // Echte 2-Kanal-Sensoren verwenden EXAKTE Magic Values:
     // - TX29-IT: 0x7d (125 dezimal)
     // - TX25-TH: 0x6A (106 dezimal)
-    if (f->humi == 106 || f->humi == 0x7d) {
-      f->ID += 64;
-    f->humi = -1;  // Keine Luftfeuchtigkeit
-} else if (f->humi > 100) {
-    f->humi = -1;  // Markiere als "keine Humidity"
-}
+    if (f->humi == 106 || f->humi == 125) {
+        // DEFINITIV Kanal 2 eines 2-Kanal-Sensors
+        f->channel = 2;
+        f->humi = -1;  // Kanal 2 hat keine Luftfeuchtigkeit
+    } 
+    else if (f->humi >= 0 && f->humi <= 100) {
+        // Gültige Luftfeuchtigkeit = Kanal 1 mit Temp+Humi-Sensor
+        f->channel = 1;
+        // f->humi bleibt wie es ist
+    }
+    else {
+        // Ungültige Humidity (> 100, aber NICHT 106 oder 125)
+        // = Einfaches 1-Kanal-Thermometer OHNE Humidity-Sensor
+        f->channel = 1;  // Bleibt Kanal 1!
+        f->humi = -1;    // Markiere: keine Humidity vorhanden
+    }
     
-    // Rate-basierte ID-Offsets NACH Kanal-2-Erkennung
+    // Rate-basierte ID-Offsets (Original-Logik bleibt)
     if (f->rate == 9579)    // slow rate sensors => increase ID by 128
         f->ID |= 0x80;
     if (f->rate == 8842)
@@ -60,7 +74,7 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
 
 bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
 {
-    static unsigned long last[SENSOR_NUM]; /* one for each sensor ID */
+    static unsigned long last[SENSOR_NUM];
 
     if (!f->valid) {
         Serial.println("LaCrosse::DisplayFrame FRAME INVALID");
@@ -69,13 +83,13 @@ bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
 
     DisplayRaw(last[f->ID], "Sensor ", data, FRAME_LENGTH, f->rssi, f->rate);
 
-    Serial.printf(" ID:%-3d Temp:%-5.1f°C", f->ID, f->temp);
+    Serial.printf(" ID:%-3d Ch:%d Temp:%-5.1f°C", f->ID, f->channel, f->temp);
     Serial.printf(" init:%d batlo:%d", f->init, f->batlo);
     
     if (f->humi > 0 && f->humi <= 100)
         Serial.printf(" Humi:%d%%", f->humi);
-    else if (f->humi == -1)
-        Serial.print(" (Channel 2, no humidity)");
+    else if (f->channel == 2)
+        Serial.print(" (Channel 2)");
     
     Serial.println();
     return true;

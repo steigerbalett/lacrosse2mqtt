@@ -57,6 +57,7 @@ struct Cache {
     bool batlo;
     bool init;
     bool valid;
+    byte channel;
 };
 
 struct Config {
@@ -67,6 +68,7 @@ struct Config {
     bool display_on;
     bool changed;
     bool ha_discovery;
+    bool debug_mode;
 };
 
 extern Config config;
