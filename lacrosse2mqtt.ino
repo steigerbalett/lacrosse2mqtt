@@ -424,7 +424,6 @@ void update_display(LaCrosse::Frame *frame)
     }
 }
 
-
 void receive()
 {
     byte *payload;
@@ -465,7 +464,22 @@ void receive()
         byte ID = frame.ID;
         byte channel = frame.channel;
         
-        // NEU: Berechne Cache-Index basierend auf ID + Kanal
+        const char* sensorType = LaCrosse::GetSensorType(&frame);
+        
+        if (strcmp(sensorType, "LaCrosse") == 0) {
+            Serial.println(">>> UNKNOWN SENSOR TYPE - SKIPPING MQTT <<<");
+            LaCrosse::DisplayFrame(payload, &frame);
+            
+            if (!showing_starfield) {
+                update_display(&frame);
+            }
+            
+            SX.EnableReceiver(true);
+            digitalWrite(LED_BUILTIN, LOW);
+            return;  // Abbruch - kein MQTT, kein Cache
+        }
+        
+        // Berechne Cache-Index basierend auf ID + Kanal
         int cacheIndex = GetCacheIndex(ID, channel);
         
         if (cacheIndex >= SENSOR_NUM) {
@@ -484,7 +498,7 @@ void receive()
         }
         
         // Cache aktualisieren
-        fcache[cacheIndex].ID = frame.ID;          // Originale ID
+        fcache[cacheIndex].ID = frame.ID;
         fcache[cacheIndex].rate = frame.rate;
         fcache[cacheIndex].rssi = rssi;
         fcache[cacheIndex].timestamp = millis();
@@ -497,7 +511,6 @@ void receive()
         fcache[cacheIndex].channel = frame.channel;
         
         // Sensor-Typ speichern
-        const char* sensorType = LaCrosse::GetSensorType(&frame);
         strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
         fcache[cacheIndex].sensorType[15] = '\0';
         
@@ -554,15 +567,12 @@ void receive()
             }
         }
 
-
     } else {
         static unsigned long last;
         LaCrosse::DisplayRaw(last, "Unknown", payload, payLoadSize, rssi, rate);
         Serial.println();
     }
 
-
-    // NEU: Display nur aktualisieren wenn Screensaver NICHT läuft
     if (!showing_starfield) {
         update_display(&frame);
     }
@@ -570,7 +580,6 @@ void receive()
     SX.EnableReceiver(true);
     digitalWrite(LED_BUILTIN, LOW);
 }
-
 
 void setup(void)
 {

@@ -39,5 +39,4 @@ The following libraries are needed for building (could all be installed via ardu
 
 ## ToDo:
 
-  * check MQTT
   * try to decode more unkown data
