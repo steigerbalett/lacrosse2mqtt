@@ -19,6 +19,7 @@ namespace LaCrosse {
     };
 
     void DecodeFrame(byte *data, struct Frame *f);
+    bool DecodeTX141Frame(byte *bytes, struct Frame *f);
     bool TryHandleData(byte *data, struct Frame *f);
     bool DisplayFrame(byte *data, struct Frame *f);
     void DisplayRaw(unsigned long &last, const char *dev, uint8_t *data, uint8_t len, int8_t rssi, int rate);

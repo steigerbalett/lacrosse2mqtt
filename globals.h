@@ -1,6 +1,8 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
+#define LACROSSE2MQTT_VERSION "2026.1.3"
+
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2
 /* if built with board "ttgo-lora32-v1" these are defined.

@@ -36,11 +36,6 @@ void add_debug_log(uint8_t *data, int8_t rssi, int datarate, bool valid) {
 extern uint32_t auto_display_on;
 extern Adafruit_SSD1306 display; 
 
-/* git version passed by compile.sh */
-#ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "2026.1.1"
-#endif
-
 // 16x16 Pixel Thermometer Favicon
 const uint8_t favicon_ico[] PROGMEM = {
     0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00,
@@ -997,14 +992,15 @@ String ESP32GetResetReason(uint32_t cpu_no) {
     return F("No meaning"); // 0 and undefined
 }
 
-void add_sysinfo_footer(String &s)
+static void add_sysinfo_footer(String &s)
 {
-    s += "<p>"
-        "System information: Uptime " + time_string() + "<br>"
-        "Software version: " + LACROSSE2MQTT_VERSION + "<br>"
-        "Built: " + __DATE__ + " " + __TIME__ + "<br>"
-        "Reset reason: " + ESP32GetResetReason(0) +
-        "</p>\n";
+    s += "<div class='footer'>"
+         "<p>Powered by LaCrosse2MQTT | "
+         "<a href='/'>🏠 Home</a> | "
+         "<a href='/config.html'>⚙️ Configuration</a> | "
+         "<a href='/update'>📦 Update</a>"
+         "</p></div>"
+         "</body></html>";
 }
 
 void handle_index()
@@ -1031,6 +1027,9 @@ void handle_index()
     index += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
     index += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
     index += "<p class='info-text'>Uptime: " + time_string() + "</p>";
+    index += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
+    index += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
+    index += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
     index += "</div>";
     
     index += "<div class='card'>";
@@ -1048,13 +1047,6 @@ void handle_index()
     
     index += "<div class='card card-full'>";
     add_current_table(index, true);
-    index += "</div>";
-    
-    // System Information Footer
-    index += "<div class='card'>";
-    index += "<h3>System Information</h3>";
-    index += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
-    index += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
     index += "</div>";
     
     add_sysinfo_footer(index);
@@ -1186,6 +1178,10 @@ void handle_config() {
     resp += "</p>";
     resp += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
     resp += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
+    resp += "<p class='info-text'>Uptime: " + time_string() + "</p>";
+    resp += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
+    resp += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
+    resp += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
     resp += "</div>";
     
     resp += "<div class='card'>";

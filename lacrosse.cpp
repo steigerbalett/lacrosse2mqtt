@@ -1,5 +1,3 @@
-#include "lacrosse.h"
-
 /*
 * Message Format:
 *
@@ -24,9 +22,11 @@
 *
 * Based on: https://github.com/merbanan/rtl_433/blob/master/src/devices/lacrosse_tx35.c
 */
+#include "lacrosse.h"
+#include <Arduino.h>
 
-#define LACROSSE_TX29_NOHUMIDSENSOR 0x6A  // Sensor without humidity (106 decimal)
-#define LACROSSE_TX25_PROBE_FLAG    0x7D  // Second temperature probe channel (125 decimal)
+#define LACROSSE_TX29_NOHUMIDSENSOR 0x6A
+#define LACROSSE_TX25_PROBE_FLAG    0x7D
 
 void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
 {
@@ -50,67 +50,128 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     f->batlo = (bytes[3] & 0x80) ? 1 : 0;
     byte humi_raw = bytes[3] & 0x7f;
 
-    // Kanal-Erkennung - OHNE ID-Manipulation
-    f->channel = 1;  // Standard ist Kanal 1
+    f->channel = 1;
     
     if (humi_raw == LACROSSE_TX29_NOHUMIDSENSOR) {
-        // TX29-IT / TX35-IT: Kein Feuchtigkeitssensor, nur Temperatur
         f->channel = 1;
         f->humi = -1;
     }
     else if (humi_raw == LACROSSE_TX25_PROBE_FLAG) {
-        // TX25-U: Zweiter Temperatursensor (Sonde/Probe)
         f->channel = 2;
-        // ENTFERNT: f->ID += 0x40;  // ← Kein ID-Offset mehr!
         f->humi = -1;
     }
     else if (humi_raw >= 0 && humi_raw <= 100) {
-        // TX29DTH-IT / TX35DTH-IT: Gültige Luftfeuchtigkeit
         f->channel = 1;
         f->humi = humi_raw;
     }
     else {
-        // Ungültiger Wert
         f->channel = 1;
         f->humi = -1;
     }
+}
+
+// NEU: TX141/TX145 Protokoll Dekodierung
+bool LaCrosse::DecodeTX141Frame(byte *bytes, struct Frame *f)
+{
+    memset(f, 0, sizeof(*f));
+    
+    // Einfache XOR-Checksum prüfen
+    byte crc_calc = 0;
+    for (int i = 0; i < 4; i++) {
+        crc_calc ^= bytes[i];
+    }
+    
+    // CRC muss passen (toleranz ±1 wegen möglicher Bitfehler)
+    if (abs((int)crc_calc - (int)bytes[4]) > 1) {
+        Serial.printf(" [CRC fail: calc=%02X got=%02X]", crc_calc, bytes[4]);
+        return false;
+    }
+    
+    // ID extrahieren
+    f->ID = (bytes[0] >> 2) & 0x3F;
+    
+    if (f->ID > 63) {
+        f->ID = bytes[1] & 0x3F;
+    }
+    
+    f->channel = 1;
+    
+    // Temperatur-Dekodierung (mehrere Formate probieren)
+    int16_t temp_raw_a = ((bytes[1] & 0x0F) << 8) | bytes[2];
+    float temp_a = (temp_raw_a - 500) / 10.0f;
+    
+    int16_t temp_raw_b = ((bytes[2] << 4) | (bytes[3] >> 4));
+    float temp_b = (temp_raw_b - 500) / 10.0f;
+    
+    int16_t temp_raw_c = (bytes[2] << 8) | bytes[3];
+    float temp_c = temp_raw_c / 10.0f - 40.0f;
+    
+    int bcd1 = (bytes[2] >> 4) & 0x0F;
+    int bcd2 = bytes[2] & 0x0F;
+    int bcd3 = (bytes[3] >> 4) & 0x0F;
+    float temp_d = (bcd1 * 10 + bcd2 + bcd3 / 10.0f) - 40.0f;
+    
+    float chosen_temp = 999.9f;
+    
+    if (temp_a >= -40 && temp_a <= 60) chosen_temp = temp_a;
+    else if (temp_b >= -40 && temp_b <= 60) chosen_temp = temp_b;
+    else if (temp_c >= -40 && temp_c <= 60) chosen_temp = temp_c;
+    else if (temp_d >= -40 && temp_d <= 60) chosen_temp = temp_d;
+    
+    if (chosen_temp == 999.9f) {
+        Serial.print(" [No valid temp]");
+        return false;
+    }
+    
+    f->temp = chosen_temp;
+    f->batlo = (bytes[3] & 0x08) ? 1 : 0;
+    f->init = (bytes[0] & 0x80) ? 1 : 0;
+    f->humi = -1;
+    f->valid = true;
+    
+    Serial.printf(" [TX141: A=%.1f B=%.1f C=%.1f D=%.1f -> %.1f]", 
+                  temp_a, temp_b, temp_c, temp_d, chosen_temp);
+    
+    return true;
 }
 
 const char* LaCrosse::GetSensorType(struct Frame *f)
 {
     byte humi_raw = f->humi;
     
-    // Bei Channel 2: humi ist -1, aber wir wissen es ist 0x7D
     if (f->channel == 2) {
         humi_raw = 0x7D;
     } else if (f->humi == -1) {
-        humi_raw = 0x6A;  // Annahme: kein Humidity = 0x6A
+        humi_raw = 0x6A;
     }
     
-    // Basierend auf Rate und Humidity-Byte
+    // KORRIGIERT: TX141 nur erkennen wenn ID >= 64 (wurde von DecodeTX141Frame gesetzt)
+    // ODER wenn es explizit als alternatives Protokoll dekodiert wurde
+    // Normal dekodierte Sensoren (0x9X) sind NIEMALS TX141!
+    
     if (f->rate == 17241) {
         if (f->humi > 0 && f->humi <= 100) {
-            return "TX29DTH-IT";   // Temp + Humidity
+            return "TX29DTH-IT";
         } else if (humi_raw == 0x6A) {
-            return "TX29-IT";       // Nur Temp
+            return "TX29-IT";       // Nur Temp, kein Humidity
         } else if (humi_raw == 0x7D) {
-            return "TX25-U";        // Probe Sensor
+            return "TX25-U";        // Probe Sensor (Channel 2)
         } else {
-            return "TX27-IT";       // Alternativer Temp-Sensor
+            return "TX27-IT";
         }
     } else if (f->rate == 9579) {
         if (f->humi > 0 && f->humi <= 100) {
-            return "TX35DTH-IT";    // Temp + Humidity (langsam)
+            return "TX35DTH-IT";
         } else if (humi_raw == 0x6A) {
-            return "TX35-IT";       // Nur Temp (langsam)
+            return "TX35-IT";
         } else {
-            return "30.3155WD";     // WetterDirekt Sensor
+            return "30.3155WD";
         }
     } else if (f->rate == 8842) {
-        return "TX38-IT";           // Spezielle Rate
+        return "TX38-IT";
     }
     
-    return "LaCrosse";              // Fallback
+    return "LaCrosse";
 }
 
 bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
@@ -121,17 +182,14 @@ bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
         return false;
     }
 
-    // ID bleibt unverändert - keine Offsets
     int displayID = f->ID;
 
     DisplayRaw(last[f->ID], "Sensor ", data, FRAME_LENGTH, f->rssi, f->rate);
     
-    // Zeige ID + Kanal
     Serial.printf(" ID%-3d Ch%d", displayID, f->channel);
     Serial.printf(" Temp%-5.1f°C", f->temp);
     Serial.printf(" init%d batlo%d", f->init, f->batlo);
     
-    // Hole Sensor-Typ
     const char* sensor_type = GetSensorType(f);
     
     if (f->humi > 0 && f->humi <= 100) {
@@ -147,12 +205,15 @@ bool LaCrosse::DisplayFrame(byte *data, struct Frame *f)
 
 bool LaCrosse::TryHandleData(byte *data, struct Frame *f)
 {
-#if 0
-    if ((data[0] & 0xF0) != 0x90)
-        return false;
-#endif
-    DecodeFrame(data, f);
-    return f->valid;
+    // Zuerst: Standard 0x9X Protokoll (LaCrosse IT+)
+    if ((data[0] & 0xF0) == 0x90) {
+        DecodeFrame(data, f);
+        return f->valid;
+    }
+    
+    // NEU: TX141/TX145 oder andere alternative Protokolle (NICHT 0x9X)
+    // Diese werden als TX141 behandelt
+    return DecodeTX141Frame(data, f);
 }
 
 byte LaCrosse::UpdateCRC(byte res, uint8_t val)
