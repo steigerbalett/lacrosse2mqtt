@@ -140,7 +140,7 @@ void draw_starfield() {
 WiFiClient client;
 PubSubClient mqtt_client(client);
 String mqtt_id;
-const String pretty_base = "climate/";
+const String pretty_base = "lacrosse/climate/";
 const String pub_base = "lacrosse/id/";
 const String hass_base = "homeassistant/sensor/";
 bool mqtt_server_set = false;
@@ -172,7 +172,6 @@ void setup_mqtt_with_will()
     }
 }
 
-
 void check_repeatedjobs()
 {
     unsigned long now = millis();
@@ -197,6 +196,11 @@ void check_repeatedjobs()
         mqtt_client.setKeepAlive(60);
         Serial.print("MQTT SERVER: "); Serial.println(config.mqtt_server);
         Serial.print("MQTT PORT:   "); Serial.println(config.mqtt_port);
+        
+        // NEU: Home Assistant Discovery Cache zurücksetzen bei Config-Änderung
+        for (int i = 0; i < SENSOR_NUM; i++)
+            hass_cfg[i] = 0;
+        
         last_reconnect = 0;
     }
     if (!mqtt_client.connected() && now - last_reconnect > 5 * 1000) {
@@ -228,7 +232,6 @@ void check_repeatedjobs()
     mqtt_ok = mqtt_client.connected();
 }
 
-
 void pub_hass_config(int what, byte ID, byte channel)
 {
     static const String name_suffix[3] = { " Humidity", " Temperature", " Temperature Ch2" };
@@ -246,11 +249,44 @@ void pub_hass_config(int what, byte ID, byte channel)
     
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
     String channelSuffix = (channel == 2) ? "_ch2" : "";
-    String deviceId = mqtt_id + "_" + String(ID);
-    String uniqueId = deviceId + channelSuffix + "_" + value[what];
     
-    String topic = "homeassistant/sensor/" + deviceId + "/" + value[what] + channelSuffix + "/config";
-    String stateTopic = pub_base + String(ID) + channelSuffix + "/" + value[what];
+    // NEU: Device ID und Topics basierend auf mqtt_use_names
+    String deviceId;
+    String uniqueId;
+    String configTopic;
+    String stateTopic;
+    
+    if (config.mqtt_use_names && id2name[ID].length() > 0) {
+        // Namen-Modus: Verwende Sensor-Namen für alles
+        String sensorIdentifier = id2name[ID];
+        if (channel == 2) {
+            sensorIdentifier += "_Ch2";
+        }
+        
+        // Device ID basiert auf Namen
+        deviceId = mqtt_id + "_" + sensorIdentifier;
+        uniqueId = deviceId + "_" + value[what];
+        
+        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_Wohnzimmer/temp/config
+        configTopic = hass_base + deviceId + "/" + value[what] + "/config";
+        
+        // State Topic: climate/Wohnzimmer/temp
+        stateTopic = pretty_base + sensorIdentifier + "/" + value[what];
+        
+    } else {
+        // ID-Modus: Verwende ID für alles (bisheriges Verhalten)
+        deviceId = mqtt_id + "_" + String(ID);
+        uniqueId = deviceId + channelSuffix + "_" + value[what];
+        
+        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_30/temp/config (oder temp_ch2/config)
+        configTopic = hass_base + deviceId + "/" + value[what] + channelSuffix + "/config";
+        
+        // State Topic: lacrosse/id/30/temp (oder lacrosse/id/30/ch2/temp)
+        String idStr = String(ID);
+        if (channel == 2)
+            idStr += "/ch2";
+        stateTopic = pub_base + idStr + "/" + value[what];
+    }
     
     String msg = "{"
             "\"device\":{"
@@ -279,15 +315,14 @@ void pub_hass_config(int what, byte ID, byte channel)
             "\"enabled_by_default\":true"
         "}";
 
-
-    Serial.println("HA Discovery: " + topic);
+    Serial.println("HA Discovery: " + configTopic);
+    Serial.println("State Topic: " + stateTopic);
     Serial.println("Msg length: " + String(msg.length()));
     
-    mqtt_client.beginPublish(topic.c_str(), msg.length(), true);
+    mqtt_client.beginPublish(configTopic.c_str(), msg.length(), true);
     mqtt_client.print(msg);
     mqtt_client.endPublish();
 }
-
 
 void pub_hass_battery_config(byte ID)
 {
@@ -295,11 +330,36 @@ void pub_hass_battery_config(byte ID)
         return;
     
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
-    String deviceId = mqtt_id + "_" + String(ID);
-    String uniqueId = deviceId + "_battery";
     
-    String topic = "homeassistant/sensor/" + deviceId + "/battery/config";
-    String stateTopic = pub_base + String(ID) + "/battery";
+    // NEU: Device ID und Topics basierend auf mqtt_use_names
+    String deviceId;
+    String uniqueId;
+    String configTopic;
+    String stateTopic;
+    
+    if (config.mqtt_use_names && id2name[ID].length() > 0) {
+        // Namen-Modus
+        String sensorIdentifier = id2name[ID];
+        deviceId = mqtt_id + "_" + sensorIdentifier;
+        uniqueId = deviceId + "_battery";
+        
+        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_Wohnzimmer/battery/config
+        configTopic = hass_base + deviceId + "/battery/config";
+        
+        // State Topic: climate/Wohnzimmer/battery
+        stateTopic = pretty_base + sensorIdentifier + "/battery";
+        
+    } else {
+        // ID-Modus
+        deviceId = mqtt_id + "_" + String(ID);
+        uniqueId = deviceId + "_battery";
+        
+        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_30/battery/config
+        configTopic = hass_base + deviceId + "/battery/config";
+        
+        // State Topic: lacrosse/id/30/battery
+        stateTopic = pub_base + String(ID) + "/battery";
+    }
     
     String msg = "{"
             "\"device\":{"
@@ -314,11 +374,10 @@ void pub_hass_battery_config(byte ID)
             "\"unit_of_measurement\":\"%\""
         "}";
     
-    mqtt_client.beginPublish(topic.c_str(), msg.length(), true);
+    mqtt_client.beginPublish(configTopic.c_str(), msg.length(), true);
     mqtt_client.print(msg);
     mqtt_client.endPublish();
 }
-
 
 void expire_cache()
 {
@@ -432,12 +491,10 @@ void receive()
     if (!SX.Receive(payLoadSize))
         return;
 
-
     digitalWrite(LED_BUILTIN, HIGH);
     rssi = SX.GetRSSI();
     rate = SX.GetDataRate();
     payload = SX.GetPayloadPointer();
-
 
     if (config.debug_mode) {
         Serial.print("\n[DEBUG] End receiving, HEX raw data: ");
@@ -452,7 +509,6 @@ void receive()
         Serial.println(rate);
     }
 
-
     LaCrosse::Frame frame;
     frame.rate = rate;
     frame.rssi = rssi;
@@ -466,20 +522,6 @@ void receive()
         
         const char* sensorType = LaCrosse::GetSensorType(&frame);
         
-        if (strcmp(sensorType, "LaCrosse") == 0) {
-            Serial.println(">>> UNKNOWN SENSOR TYPE - SKIPPING MQTT <<<");
-            LaCrosse::DisplayFrame(payload, &frame);
-            
-            if (!showing_starfield) {
-                update_display(&frame);
-            }
-            
-            SX.EnableReceiver(true);
-            digitalWrite(LED_BUILTIN, LOW);
-            return;  // Abbruch - kein MQTT, kein Cache
-        }
-        
-        // Berechne Cache-Index basierend auf ID + Kanal
         int cacheIndex = GetCacheIndex(ID, channel);
         
         if (cacheIndex >= SENSOR_NUM) {
@@ -488,7 +530,6 @@ void receive()
             digitalWrite(LED_BUILTIN, LOW);
             return;
         }
-
 
         LaCrosse::Frame oldframe;
         if (fcache[cacheIndex].timestamp > 0) {
@@ -510,23 +551,35 @@ void receive()
         fcache[cacheIndex].valid = frame.valid;
         fcache[cacheIndex].channel = frame.channel;
         
-        // Sensor-Typ speichern
         strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
         fcache[cacheIndex].sensorType[15] = '\0';
         
         LaCrosse::DisplayFrame(payload, &frame);
         
-        // MQTT Topic: ID30/ch2 oder ID30
-        String idStr = String(ID, DEC);
-        if (channel == 2)
-            idStr += "/ch2";
+        // NEU: MQTT Topic-Struktur basierend auf Einstellung
+        String mqttBaseTopic;
+        String sensorIdentifier;
         
-        String pub = pub_base + idStr + "/";
+        if (config.mqtt_use_names && id2name[ID].length() > 0) {
+            // Namen-Modus: climate/Wohnzimmer/temp
+            sensorIdentifier = id2name[ID];
+            if (channel == 2) {
+                sensorIdentifier += "_Ch2";
+            }
+            mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+        } else {
+            // ID-Modus: lacrosse/id/30/temp oder lacrosse/id/30/ch2/temp
+            sensorIdentifier = String(ID, DEC);
+            if (channel == 2)
+                sensorIdentifier += "/ch2";
+            mqttBaseTopic = pub_base + sensorIdentifier + "/";
+        }
         
-        mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
+        // MQTT Publish
+        mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(frame.temp, 1).c_str());
         
         if (frame.humi > 0 && frame.humi <= 100) {
-            mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
+            mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(frame.humi, DEC).c_str());
         }
         
         // MQTT state
@@ -538,23 +591,15 @@ void receive()
              ", \"channel\": " + String(frame.channel) +
              ", \"type\": \"" + String(sensorType) + "\"" +
              "}";
-        mqtt_client.publish((pub + "state").c_str(), state.c_str());
+        mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
         
-        // Pretty names mit ID
-        if (id2name[ID].length() > 0) {
-            String sensorName = id2name[ID];
-            if (channel == 2) {
-                sensorName += "_Ch2";
-            }
-            
-            pub = pretty_base + sensorName + "/";
-            
+        // Home Assistant Discovery (nur wenn HA Discovery aktiviert und Namen vergeben)
+        if (config.ha_discovery && id2name[ID].length() > 0) {
             if (oldframe.valid && abs(oldframe.temp - frame.temp) > 2.0) {
                 Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp, 1));
             } else {
                 int haConfig = (channel == 2) ? 2 : 1;
                 pub_hass_config(haConfig, ID, channel);
-                mqtt_client.publish((pub + "temp").c_str(), String(frame.temp, 1).c_str());
             }
             
             if (frame.humi > 0 && frame.humi <= 100) {
@@ -562,7 +607,6 @@ void receive()
                     Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
                 } else {
                     pub_hass_config(0, ID, channel);
-                    mqtt_client.publish((pub + "humi").c_str(), String(frame.humi, DEC).c_str());
                 }
             }
         }
