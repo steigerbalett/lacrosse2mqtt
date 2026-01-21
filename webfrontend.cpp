@@ -36,36 +36,6 @@ void add_debug_log(uint8_t *data, int8_t rssi, int datarate, bool valid) {
 extern uint32_t auto_display_on;
 extern Adafruit_SSD1306 display; 
 
-// 16x16 Pixel Thermometer Favicon
-const uint8_t favicon_ico[] PROGMEM = {
-    0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00,
-    0x04, 0x00, 0x28, 0x01, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x28, 0x00,
-    0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x01, 0x00,
-    0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
-    0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21,
-    0x00, 0x00, 0x00, 0x24, 0x20, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24,
-    0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x14,
-    0x41, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x14,
-    0x41, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x22, 0x22, 0x00, 0x00, 0x02,
-    0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF,
-    0xE7, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF,
-    0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF,
-    0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF,
-    0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF,
-    0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00
-};
-
 static WebServer server(80);
 static HTTPUpdateServer httpUpdater;
 
@@ -425,6 +395,12 @@ static void add_header(String &s, const String &title)
     s = "<!DOCTYPE html><html><head>"
         "<meta charset='UTF-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+        "<circle cx='50' cy='30' r='15' fill='%2303a9f4'/>"
+        "<rect x='43' y='28' width='14' height='45' rx='7' fill='%2303a9f4'/>"
+        "<circle cx='50' cy='70' r='12' fill='%23ff5252'/>"
+        "<rect x='46' y='35' width='8' height='30' fill='%23ff5252'/>"
+        "</svg>\">"
         "<style>"
         ":root { "
             "--primary-color: #03a9f4; "
@@ -1002,7 +978,7 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 static void add_sysinfo_footer(String &s)
 {
     s += "<div class='footer'>"
-         "<p>Powered by LaCrosse2MQTT | "
+         "<a href='https://github.com/steigerbalett/lacrosse2mqtt'>Powered by LaCrosse2MQTT</a> | "
          "<a href='/'>🏠 Home</a> | "
          "<a href='/config.html'>⚙️ Configuration</a> | "
          "<a href='/update'>📦 Update</a>"
@@ -1458,6 +1434,119 @@ void handle_debug() {
     server.send(200, "text/html", resp);
 }
 
+// Schöne Upload-Seite
+void handle_update_page() {
+    String page;
+    add_header(page, "Firmware Update");
+    
+    page += "<div class='card'>";
+    page += "<h2>📦 Firmware Update</h2>";
+    page += "<p class='info-text'>Upload a new firmware binary (.bin file) to update your device.</p>";
+    
+    page += "<div style='background-color: rgba(255, 152, 0, 0.1); border: 1px solid var(--warning-color); border-radius: 8px; padding: 16px; margin: 16px 0;'>";
+    page += "<p style='margin: 0; color: var(--warning-color); font-weight: 500;'>⚠️ Warning</p>";
+    page += "<p style='margin: 8px 0 0 0; font-size: 13px;'>The device will restart after the update. Make sure you have the correct firmware file.</p>";
+    page += "</div>";
+    
+    page += "<form method='POST' action='/update' enctype='multipart/form-data' id='upload_form'>";
+    page += "<div style='margin: 20px 0;'>";
+    page += "<label style='display: block; margin-bottom: 8px; font-weight: 500;'>Select Firmware File (.bin)</label>";
+    page += "<input type='file' name='update' accept='.bin' id='file_input' required ";
+    page += "style='width: 100%; padding: 12px; border: 2px dashed var(--divider-color); border-radius: 8px; ";
+    page += "background-color: var(--secondary-background-color); cursor: pointer;'>";
+    page += "<p id='file_info' style='margin-top: 8px; font-size: 12px; color: var(--secondary-text-color);'></p>";
+    page += "</div>";
+    
+    page += "<div style='margin: 20px 0;'>";
+    page += "<div id='progress_container' style='display: none; margin-bottom: 16px;'>";
+    page += "<div style='background-color: var(--secondary-background-color); border-radius: 8px; height: 30px; overflow: hidden; border: 1px solid var(--divider-color);'>";
+    page += "<div id='progress_bar' style='height: 100%; background: linear-gradient(90deg, var(--primary-color), var(--accent-color)); width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 500; font-size: 13px;'></div>";
+    page += "</div>";
+    page += "<p id='progress_text' style='text-align: center; margin-top: 8px; font-size: 13px; color: var(--primary-text-color);'></p>";
+    page += "</div>";
+    
+    page += "<button type='submit' id='upload_button' class='action-button' style='width: 100%; padding: 14px; font-size: 15px;'>";
+    page += "🚀 Upload Firmware";
+    page += "</button>";
+    page += "</div>";
+    page += "</form>";
+    
+    page += "<div style='margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--divider-color);'>";
+    page += "<h3>Current Firmware</h3>";
+    page += "<p class='info-text'>Version: " + String(LACROSSE2MQTT_VERSION) + "</p>";
+    page += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
+    page += "</div>";
+    page += "</div>";
+    
+    page += "<div class='card' style='margin-top: 16px;'>";
+    page += "<h3>💡 Instructions</h3>";
+    page += "<ol style='margin: 8px 0; padding-left: 24px; color: var(--primary-text-color);'>";
+    page += "<li style='margin: 8px 0;'>Download the latest firmware .bin file</li>";
+    page += "<li style='margin: 8px 0;'>Select the file using the button above</li>";
+    page += "<li style='margin: 8px 0;'>Click 'Upload Firmware' and wait for completion</li>";
+    page += "<li style='margin: 8px 0;'>Device will restart automatically after update</li>";
+    page += "</ol>";
+    page += "<p style='margin-top: 16px;'><a href='/' class='action-button'>← Back to Main Page</a></p>";
+    page += "</div>";
+    
+    // JavaScript für Upload-Progress und File-Info
+    page += "<script>";
+    page += "document.getElementById('file_input').addEventListener('change', function(e) {";
+    page += "  var file = e.target.files[0];";
+    page += "  if (file) {";
+    page += "    var size = (file.size / 1024 / 1024).toFixed(2);";
+    page += "    document.getElementById('file_info').textContent = '📄 ' + file.name + ' (' + size + ' MB)';";
+    page += "  }";
+    page += "});";
+    
+    page += "document.getElementById('upload_form').addEventListener('submit', function(e) {";
+    page += "  e.preventDefault();";
+    page += "  var formData = new FormData(this);";
+    page += "  var xhr = new XMLHttpRequest();";
+    page += "  ";
+    page += "  document.getElementById('progress_container').style.display = 'block';";
+    page += "  document.getElementById('upload_button').disabled = true;";
+    page += "  document.getElementById('upload_button').style.opacity = '0.5';";
+    page += "  document.getElementById('upload_button').textContent = '⏳ Uploading...';";
+    page += "  ";
+    page += "  xhr.upload.addEventListener('progress', function(e) {";
+    page += "    if (e.lengthComputable) {";
+    page += "      var percent = Math.round((e.loaded / e.total) * 100);";
+    page += "      document.getElementById('progress_bar').style.width = percent + '%';";
+    page += "      document.getElementById('progress_bar').textContent = percent + '%';";
+    page += "      document.getElementById('progress_text').textContent = 'Uploading: ' + (e.loaded / 1024 / 1024).toFixed(1) + ' MB / ' + (e.total / 1024 / 1024).toFixed(1) + ' MB';";
+    page += "    }";
+    page += "  });";
+    page += "  ";
+    page += "  xhr.addEventListener('load', function() {";
+    page += "    if (xhr.status === 200) {";
+    page += "      document.getElementById('progress_text').innerHTML = '<span style=\"color: var(--success-color);\">✓ Upload successful! Device is restarting...</span>';";
+    page += "      document.getElementById('upload_button').textContent = '✓ Success!';";
+    page += "      setTimeout(function() { window.location.href = '/'; }, 15000);";
+    page += "    } else {";
+    page += "      document.getElementById('progress_text').innerHTML = '<span style=\"color: var(--error-color);\">✗ Upload failed: ' + xhr.statusText + '</span>';";
+    page += "      document.getElementById('upload_button').disabled = false;";
+    page += "      document.getElementById('upload_button').style.opacity = '1';";
+    page += "      document.getElementById('upload_button').textContent = '🔄 Try Again';";
+    page += "    }";
+    page += "  });";
+    page += "  ";
+    page += "  xhr.addEventListener('error', function() {";
+    page += "    document.getElementById('progress_text').innerHTML = '<span style=\"color: var(--error-color);\">✗ Network error occurred</span>';";
+    page += "    document.getElementById('upload_button').disabled = false;";
+    page += "    document.getElementById('upload_button').style.opacity = '1';";
+    page += "    document.getElementById('upload_button').textContent = '🔄 Try Again';";
+    page += "  });";
+    page += "  ";
+    page += "  xhr.open('POST', '/update', true);";
+    page += "  xhr.send(formData);";
+    page += "});";
+    page += "</script>";
+    
+    add_sysinfo_footer(page);
+    server.send(200, "text/html", page);
+}
+
 void setup_web()
 {
     if (!load_idmap())
@@ -1468,16 +1557,14 @@ void setup_web()
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
     server.on("/config.html", handle_config);
-    server.on("/debug.html", handle_debug);  // NEU
+    server.on("/debug.html", handle_debug);
+    server.on("/update", HTTP_GET, handle_update_page);
     
-    server.on("/favicon.ico", HTTP_GET, []() {
-        server.send_P(200, "image/x-icon", (const char*)favicon_ico, sizeof(favicon_ico));
-    });
-
-    server.onNotFound([](){
+    server.onNotFound([]() {
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
         Serial.println("404: " + server.uri());
     });
+    
     httpUpdater.setup(&server);
     server.begin();
 }
