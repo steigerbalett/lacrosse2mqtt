@@ -1,7 +1,7 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
-#define LACROSSE2MQTT_VERSION "2026.1.3"
+#define LACROSSE2MQTT_VERSION "2026.1.4"
 
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2
@@ -83,6 +83,7 @@ struct Config {
     bool ha_discovery;
     bool debug_mode;
     bool screensaver_mode;
+    bool mqtt_use_names;
 };
 
 extern Config config;

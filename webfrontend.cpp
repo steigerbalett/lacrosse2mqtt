@@ -145,7 +145,8 @@ bool load_config()
     config.display_on = true; /* default */
     config.ha_discovery = false; /* default */
     config.debug_mode = false; /* default */
-    config.screensaver_mode = false; /* default - NEU */
+    config.screensaver_mode = true; /* default */
+    config.mqtt_use_names = true;
     
     if (!littlefs_ok)
         return false;
@@ -179,8 +180,13 @@ bool load_config()
             config.ha_discovery = doc["ha_discovery"];
         if (!doc["debug_mode"].isNull())
             config.debug_mode = doc["debug_mode"];
-        if (!doc["screensaver_mode"].isNull())  // NEU
+        if (!doc["screensaver_mode"].isNull()) {
             config.screensaver_mode = doc["screensaver_mode"];
+        }
+        if (!doc["mqtt_use_names"].isNull()) {
+            config.mqtt_use_names = doc["mqtt_use_names"];
+        }
+
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -216,7 +222,8 @@ bool save_config()
     doc["display_on"] = config.display_on;
     doc["ha_discovery"] = config.ha_discovery;
     doc["debug_mode"] = config.debug_mode;
-    doc["screensaver_mode"] = config.screensaver_mode;  // NEU
+    doc["screensaver_mode"] = config.screensaver_mode;
+    doc["mqtt_use_names"] = config.mqtt_use_names;
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -1119,6 +1126,16 @@ void handle_config() {
             Serial.println("Screensaver mode changed to: " + String(config.screensaver_mode));
         }
     }
+    if (server.hasArg("mqtt_use_names")) {
+        String on = server.arg("mqtt_use_names");
+        int tmp = on.toInt();
+        if (tmp != config.mqtt_use_names) {
+            config_changed = true;
+            config.mqtt_use_names = tmp;
+            config.changed = true;
+            Serial.println("MQTT use names changed to " + String(config.mqtt_use_names));
+        }
+    }
     if (server.hasArg("cancel")) {
         if (server.arg("cancel") == String(token)) {
             load_idmap();
@@ -1344,7 +1361,35 @@ void handle_config() {
     resp += "<button type='submit'>Update Screensaver</button>";
     resp += "</form>";
     resp += "</div>";
-    
+
+    // NEU: MQTT Topic Mode
+    resp += "<div class=\"card\">";
+    resp += "<h2>MQTT Topic Settings</h2>";
+    resp += "<form action=\"config.html\">";
+    resp += "<div class=\"radio-group\">";
+    resp += "<div class=\"radio-item\">";
+    resp += "<label>";
+    resp += "<input type=\"radio\" name=\"mqtt_use_names\" value=\"1\"";
+    if (config.mqtt_use_names) resp += " checked";
+    resp += ">";
+    resp += "Use Sensor Names";
+    resp += "</label>";
+    resp += "<div class=\"option-description\">Publish to climate/SensorName/temp (requires sensor names to be set)</div>";
+    resp += "</div>";
+    resp += "<div class=\"radio-item\">";
+    resp += "<label>";
+    resp += "<input type=\"radio\" name=\"mqtt_use_names\" value=\"0\"";
+    if (!config.mqtt_use_names) resp += " checked";
+    resp += ">";
+    resp += "Use Sensor IDs";
+    resp += "</label>";
+    resp += "<div class=\"option-description\">Publish to lacrosse/id/30/temp (default)</div>";
+    resp += "</div>";
+    resp += "</div>";
+    resp += "<button type=\"submit\">Update MQTT Topics</button>";
+    resp += "</form>";
+    resp += "</div>";
+
     resp += "</div>";
     
     add_sysinfo_footer(resp);
