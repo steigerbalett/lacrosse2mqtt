@@ -13,8 +13,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * You should have received a copy of the GNU General Public License along
- * with this program; if not, got to https://www.gnu.org/licenses/
+ * with this program; if not, got to [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/)
  */
+
 
 #include <LittleFS.h>
 #include <SPI.h>
@@ -29,14 +30,18 @@
 #include "SX127x.h"
 #include <WiFiManager.h>
 
+
 #define FORMAT_LITTLEFS_IF_FAILED false
+
 
 /* if display is default to off, keep it on for this many seconds after power on
  * or a wifi change event */
 #define DISPLAY_TIMEOUT 300
 
+
 const int interval = 20;   /* toggle interval in seconds */
 const int freq = 868290;   /* frequency in kHz, 868300 did not receive all sensors... */
+
 
 unsigned long last_reconnect;
 unsigned long last_switch = 0;
@@ -44,14 +49,17 @@ bool littlefs_ok;
 bool mqtt_ok;
 uint32_t auto_display_on = 0;
 
+
 Config config;
 Cache fcache[SENSOR_NUM]; /* 256 sensor slots */
 String id2name[SENSOR_NUM];
 uint8_t hass_cfg[SENSOR_NUM];
 
+
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
+
 
 #define STAR_COUNT 50
 struct Star {
@@ -59,19 +67,28 @@ struct Star {
 };
 Star stars[STAR_COUNT];
 
+
 SX127x SX(LORA_CS, LORA_RST);
+
+
+String wifi_disp;
+bool showing_starfield = false;  // NEU: Global für receive() und loop()
+
 
 void display_set_on() {
     display.ssd1306_command(SSD1306_DISPLAYON);
 }
 
+
 void display_set_off() {
     display.ssd1306_command(SSD1306_DISPLAYOFF);
 }
 
+
 void reset_display_timeout() {
     auto_display_on = uptime_sec();
 }
+
 
 void init_starfield() {
     for (int i = 0; i < STAR_COUNT; i++) {
@@ -80,6 +97,7 @@ void init_starfield() {
         stars[i].z = random(1, 64);
     }
 }
+
 
 void draw_starfield() {
     display.clearDisplay();
@@ -112,10 +130,12 @@ void draw_starfield() {
     display.display();
 }
 
+
 #define ESP_MANUFACTURER  "ESPRESSIF"
 #define ESP_MODEL_NUMBER  "ESP32"
 #define ESP_MODEL_NAME    "ESPRESSIF IOT"
 #define ESP_DEVICE_NAME   "ESP STATION"
+
 
 WiFiClient client;
 PubSubClient mqtt_client(client);
@@ -125,9 +145,36 @@ const String pub_base = "lacrosse/id/";
 const String hass_base = "homeassistant/sensor/";
 bool mqtt_server_set = false;
 
+
+void setup_mqtt_with_will()
+{
+    String statusTopic = pub_base + "status";
+    
+    // Set Last Will and Testament
+    // Wenn die Verbindung abbricht, wird automatisch "offline" publiziert
+    if (mqtt_server_set) {
+        const char *user = NULL;
+        const char *pass = NULL;
+        if (config.mqtt_user.length()) {
+            user = config.mqtt_user.c_str();
+            pass = config.mqtt_pass.c_str();
+        }
+        
+        // Connect mit Last Will
+        if (mqtt_client.connect(mqtt_id.c_str(), user, pass, 
+                                statusTopic.c_str(), 0, true, "offline")) {
+            Serial.println("MQTT Connected with LWT");
+            mqtt_client.publish(statusTopic.c_str(), "online", true);
+            
+            for (int i = 0; i < SENSOR_NUM; i++)
+                hass_cfg[i] = 0;
+        }
+    }
+}
+
+
 void check_repeatedjobs()
 {
-    /* Toggle the data rate fast/slow */
     unsigned long now = millis();
     if (now - last_switch > interval * 1000) {
         SX.NextDataRate();
@@ -136,8 +183,11 @@ void check_repeatedjobs()
     if (config.changed) {
         Serial.println("MQTT config changed. Dis- and reconnecting...");
         config.changed = false;
-        if (mqtt_ok)
+        if (mqtt_ok) {
+            String statusTopic = pub_base + "status";
+            mqtt_client.publish(statusTopic.c_str(), "offline", true);
             mqtt_client.disconnect();
+        }
         if (config.mqtt_server.length() > 0) {
             const char *_server = config.mqtt_server.c_str();
             mqtt_client.setServer(_server, config.mqtt_port);
@@ -158,8 +208,16 @@ void check_repeatedjobs()
                 pass = config.mqtt_pass.c_str();
             }
             Serial.print("MQTT RECONNECT...");
-            if (mqtt_client.connect(mqtt_id.c_str(), user, pass)) {
+            
+            String statusTopic = pub_base + "status";
+            
+            if (mqtt_client.connect(mqtt_id.c_str(), user, pass, 
+                                   statusTopic.c_str(), 0, true, "offline")) {
                 Serial.println("OK!");
+                
+                mqtt_client.publish(statusTopic.c_str(), "online", true);
+                Serial.println("Published status: online");
+                
                 for (int i = 0; i < SENSOR_NUM; i++)
                     hass_cfg[i] = 0;
             } else
@@ -170,10 +228,9 @@ void check_repeatedjobs()
     mqtt_ok = mqtt_client.connected();
 }
 
-// KORRIGIERT: Home Assistant Discovery Config
+
 void pub_hass_config(int what, byte ID, byte channel)
 {
-    // what: 0 = humidity, 1 = temp (channel 1), 2 = temp (channel 2)
     static const String name_suffix[3] = { " Humidity", " Temperature", " Temperature Ch2" };
     static const String value[3] = { "humi", "temp", "temp" };
     static const String dclass[3] = { "humidity", "temperature", "temperature" };
@@ -182,7 +239,6 @@ void pub_hass_config(int what, byte ID, byte channel)
     if (!config.ha_discovery)
         return;
     
-    // Prüfe ob schon konfiguriert
     byte configMask = (1 << what);
     if (hass_cfg[ID] & configMask)
         return;
@@ -190,31 +246,39 @@ void pub_hass_config(int what, byte ID, byte channel)
     
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
     String channelSuffix = (channel == 2) ? "_ch2" : "";
-    String uniqueId = mqtt_id + "_" + String(ID) + channelSuffix + "_" + value[what];
+    String deviceId = mqtt_id + "_" + String(ID);
+    String uniqueId = deviceId + channelSuffix + "_" + value[what];
     
-    String topic = hass_base + uniqueId + "/config";
+    String topic = "homeassistant/sensor/" + deviceId + "/" + value[what] + channelSuffix + "/config";
     String stateTopic = pub_base + String(ID) + channelSuffix + "/" + value[what];
     
     String msg = "{"
             "\"device\":{"
-                "\"identifiers\":[\"" + mqtt_id + "_" + String(ID) + "\"],"
+                "\"identifiers\":[\"" + deviceId + "\"],"
                 "\"name\":\"" + sensorName + "\","
                 "\"manufacturer\":\"LaCrosse\","
-                "\"sw_version\":\"v2026.1\","
+                "\"sw_version\":\"" + String(LACROSSE2MQTT_VERSION) + "\","
                 "\"model\":\"LaCrosse IT+\""
             "},"
             "\"origin\":{"
-                "\"name\":\"lacrosse2mqtt\","
+                "\"name\":\"LaCrosse2MQTT\","
                 "\"url\":\"https://github.com/seyd/lacrosse2mqtt\","
-                "\"sw_version\":\"v2026.1\""
+                "\"sw_version\":\"" + String(LACROSSE2MQTT_VERSION) + "\""
+            "},"
+            "\"availability\":{"
+                "\"topic\":\"" + pub_base + "status\","
+                "\"payload_available\":\"online\","
+                "\"payload_not_available\":\"offline\""
             "},"
             "\"state_class\":\"measurement\","
             "\"device_class\":\"" + dclass[what]+ "\","
             "\"unit_of_measurement\":\"" + unit[what] + "\","
             "\"unique_id\":\"" + uniqueId + "\","
             "\"state_topic\":\"" + stateTopic + "\","
-            "\"name\":\"" + sensorName + name_suffix[what] + "\""
+            "\"name\":\"" + sensorName + name_suffix[what] + "\","
+            "\"enabled_by_default\":true"
         "}";
+
 
     Serial.println("HA Discovery: " + topic);
     Serial.println("Msg length: " + String(msg.length()));
@@ -223,6 +287,38 @@ void pub_hass_config(int what, byte ID, byte channel)
     mqtt_client.print(msg);
     mqtt_client.endPublish();
 }
+
+
+void pub_hass_battery_config(byte ID)
+{
+    if (!config.ha_discovery)
+        return;
+    
+    String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
+    String deviceId = mqtt_id + "_" + String(ID);
+    String uniqueId = deviceId + "_battery";
+    
+    String topic = "homeassistant/sensor/" + deviceId + "/battery/config";
+    String stateTopic = pub_base + String(ID) + "/battery";
+    
+    String msg = "{"
+            "\"device\":{"
+                "\"identifiers\":[\"" + deviceId + "\"]"
+            "},"
+            "\"device_class\":\"battery\","
+            "\"entity_category\":\"diagnostic\","
+            "\"state_class\":\"measurement\","
+            "\"unique_id\":\"" + uniqueId + "\","
+            "\"state_topic\":\"" + stateTopic + "\","
+            "\"name\":\"" + sensorName + " Battery\","
+            "\"unit_of_measurement\":\"%\""
+        "}";
+    
+    mqtt_client.beginPublish(topic.c_str(), msg.length(), true);
+    mqtt_client.print(msg);
+    mqtt_client.endPublish();
+}
+
 
 void expire_cache()
 {
@@ -236,9 +332,7 @@ void expire_cache()
     }
 }
 
-String wifi_disp;
 
-// KORRIGIERT: Display-Update Funktion
 void update_display(LaCrosse::Frame *frame)
 {
     uint32_t now = uptime_sec();
@@ -330,6 +424,7 @@ void update_display(LaCrosse::Frame *frame)
     }
 }
 
+
 void receive()
 {
     byte *payload;
@@ -338,10 +433,12 @@ void receive()
     if (!SX.Receive(payLoadSize))
         return;
 
+
     digitalWrite(LED_BUILTIN, HIGH);
     rssi = SX.GetRSSI();
     rate = SX.GetDataRate();
     payload = SX.GetPayloadPointer();
+
 
     if (config.debug_mode) {
         Serial.print("\n[DEBUG] End receiving, HEX raw data: ");
@@ -355,6 +452,7 @@ void receive()
         Serial.print(" Rate:");
         Serial.println(rate);
     }
+
 
     LaCrosse::Frame frame;
     frame.rate = rate;
@@ -376,6 +474,7 @@ void receive()
             digitalWrite(LED_BUILTIN, LOW);
             return;
         }
+
 
         LaCrosse::Frame oldframe;
         if (fcache[cacheIndex].timestamp > 0) {
@@ -455,16 +554,23 @@ void receive()
             }
         }
 
+
     } else {
         static unsigned long last;
         LaCrosse::DisplayRaw(last, "Unknown", payload, payLoadSize, rssi, rate);
         Serial.println();
     }
 
-    update_display(&frame);
+
+    // NEU: Display nur aktualisieren wenn Screensaver NICHT läuft
+    if (!showing_starfield) {
+        update_display(&frame);
+    }
+    
     SX.EnableReceiver(true);
     digitalWrite(LED_BUILTIN, LOW);
 }
+
 
 void setup(void)
 {
@@ -474,6 +580,7 @@ void setup(void)
     config.mqtt_port = 1883;
     Serial.begin(115200);
 
+
     WiFiManager wifiManager;
     if (!wifiManager.autoConnect("Lacrosse2mqttAP")) {
       Serial.println("Failed to connect and hit timeout");
@@ -481,20 +588,24 @@ void setup(void)
       delay(1000);
     }
 
+
     Serial.println("Connected to WiFi!");
     Serial.print("Verbundenes WLAN: ");
     Serial.println(WiFi.SSID());
     Serial.print("IP-Adresse: ");
     Serial.println(WiFi.localIP());
 
+
     littlefs_ok = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
     if (!littlefs_ok)
         Serial.println("LittleFS Mount Failed");
     setup_web();
 
+
     if (config.debug_mode) {
         Serial.println("Debug Mode ENABLED");
     }
+
 
     pinMode(KEY_BUILTIN, INPUT);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -509,7 +620,9 @@ void setup(void)
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
+
     delay(1000);
+
 
     Serial.println("TTGO LORA lacrosse2mqtt converter");
     Serial.println(mqtt_id);
@@ -517,10 +630,11 @@ void setup(void)
     // Starfield-Animation beim Booten (10 Sekunden)
     init_starfield();
     unsigned long boot_animation_start = millis();
-    while (millis() - boot_animation_start < 10000) {
+    while (millis() - boot_animation_start < 5000) {
         draw_starfield();
         delay(50);
     }
+
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -529,7 +643,9 @@ void setup(void)
     display.display();
     delay(2000);
 
+
     last_switch = millis();
+
 
     if (!SX.init()) {
         Serial.println("** SX127x init failed! **");
@@ -543,6 +659,7 @@ void setup(void)
     SX.NextDataRate(0);
     SX.EnableReceiver(true);
 }
+
 
 uint32_t check_button()
 {
@@ -565,8 +682,9 @@ static int last_state = -1;
 void loop(void)
 {
     static unsigned long last_starfield_update = 0;
-    static bool showing_starfield = false;
-    static uint32_t last_data_received = 0;  // NEU: Track letzten Datenempfang
+    static uint32_t last_interaction = 0;  
+    static bool interaction_initialized = false;
+    static uint32_t last_wifi_display = 0;
     
     handle_client();
 
@@ -584,6 +702,7 @@ void loop(void)
             Serial.println("Display always on (change in webfrontend)");
         }
         showing_starfield = false;
+        last_interaction = uptime_sec();
         update_display(NULL);
     }
 
@@ -591,68 +710,101 @@ void loop(void)
     check_repeatedjobs();
     expire_cache();
     
+    // WiFi-Zustandsänderung = Interaktion
     if (last_state != wifi_state) {
         last_state = wifi_state;
         wifi_disp = String(_wifi_state_str[wifi_state]);
         auto_display_on = uptime_sec();
         showing_starfield = false;
+        last_interaction = uptime_sec();
+        last_wifi_display = uptime_sec();
         update_display(NULL);
     }
     
     unsigned long now = millis();
     uint32_t uptime = uptime_sec();
     
-    // NEU: Prüfe ob kürzlich Daten empfangen wurden
-    bool has_recent_data = false;
-    bool has_error = false;
-    for (int i = 0; i < SENSOR_NUM; i++) {
-        if (fcache[i].timestamp > 0 && (now - fcache[i].timestamp) < 300000) {
-            has_recent_data = true;
-            last_data_received = uptime;
-            
-            // Prüfe auf Fehler (schwache Batterie)
-            if (fcache[i].batlo) {
-                has_error = true;
-            }
-        }
+    if (!interaction_initialized) {
+        last_interaction = uptime;
+        last_wifi_display = uptime;
+        interaction_initialized = true;
     }
     
-    // Prüfe MQTT Fehler
-    if (!mqtt_ok) {
-        has_error = true;
+    // Prüfe auf kritische Fehler (NUR Battery-Fehler)
+    bool has_critical_error = false;
+    bool has_recent_data = false;
+    
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        if (fcache[i].timestamp > 0) {
+            unsigned long age = now - fcache[i].timestamp;
+            
+            // Daten sind aktuell (< 5 Minuten)
+            if (age < 300000) {
+                has_recent_data = true;
+                
+                // NUR Battery-Low ist kritischer Fehler
+                if (fcache[i].batlo) {
+                    has_critical_error = true;
+                    // NUR bei NEUEM Battery-Fehler Interaktion setzen
+                    static bool battery_error_reported[SENSOR_NUM] = {false};
+                    if (!battery_error_reported[i]) {
+                        battery_error_reported[i] = true;
+                        last_interaction = uptime;
+                        showing_starfield = false;
+                    }
+                }
+            }
+        }
     }
     
     bool display_should_be_on = config.display_on || (uptime < auto_display_on + DISPLAY_TIMEOUT);
     
     if (display_should_be_on) {
-        bool show_wifi = (uptime % 70) < 10;
-        
-        // NEU: Screensaver Logik
+        // WiFi-Anzeige-Logik abhängig von Screensaver-Modus
+        bool show_wifi;
         if (config.screensaver_mode && config.display_on) {
-            // Bei "Display always on" + Screensaver Mode:
-            // Zeige Screensaver nach 5 Minuten AUSSER bei Fehlern
-            uint32_t idle_time = uptime - last_data_received;
+            // Screensaver-Modus: WiFi nur alle 5 Minuten (300 Sekunden)
+            uint32_t time_since_last_wifi = uptime - last_wifi_display;
+            show_wifi = (time_since_last_wifi >= 300) && (time_since_last_wifi < 310);
+        } else {
+            // Normal-Modus: WiFi alle 70 Sekunden für 10 Sekunden
+            show_wifi = (uptime % 70) < 10;
+        }
+        
+        // SCREENSAVER LOGIK
+        if (config.screensaver_mode && config.display_on) {
+            uint32_t idle_time = uptime - last_interaction;
             
-            if (idle_time > 300 && !has_error) {
-                // Mehr als 5 Minuten keine Daten UND kein Fehler -> Screensaver
+            bool should_show_screensaver = (idle_time > 300) && 
+                                          !has_critical_error && 
+                                          !show_wifi;
+            
+            if (should_show_screensaver) {
                 if ((now - last_starfield_update > 50)) {
                     last_starfield_update = now;
-                    showing_starfield = true;
+                    if (!showing_starfield) {
+                        Serial.println(">>> STARTING SCREENSAVER <<<");
+                        showing_starfield = true;
+                    }
                     draw_starfield();
                 }
             } else {
-                // Daten vorhanden ODER Fehler -> Normales Display
                 if (showing_starfield) {
+                    Serial.println(">>> STOPPING SCREENSAVER <<<");
                     showing_starfield = false;
                     update_display(NULL);
+                } else if (show_wifi) {
+                    update_display(NULL);
+                    last_wifi_display = uptime;
                 }
             }
         } else {
-            // Alte Logik: Screensaver nur wenn keine Daten
             if (!show_wifi) {
                 if (!has_recent_data && (now - last_starfield_update > 50)) {
                     last_starfield_update = now;
-                    showing_starfield = true;
+                    if (!showing_starfield) {
+                        showing_starfield = true;
+                    }
                     draw_starfield();
                 } else if (has_recent_data && showing_starfield) {
                     showing_starfield = false;

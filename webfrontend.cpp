@@ -36,11 +36,6 @@ void add_debug_log(uint8_t *data, int8_t rssi, int datarate, bool valid) {
 extern uint32_t auto_display_on;
 extern Adafruit_SSD1306 display; 
 
-/* git version passed by compile.sh */
-#ifndef LACROSSE2MQTT_VERSION
-#define LACROSSE2MQTT_VERSION  "2026.1.2"
-#endif
-
 // 16x16 Pixel Thermometer Favicon
 const uint8_t favicon_ico[] PROGMEM = {
     0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00,

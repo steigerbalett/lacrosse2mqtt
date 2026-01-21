@@ -36,3 +36,8 @@ The following libraries are needed for building (could all be installed via ardu
    * [WiFiManager](https://github.com/tzapu/WiFiManager)
 
    * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
+
+## ToDo:
+
+  * check MQTT
+  * try to decode more unkown data
