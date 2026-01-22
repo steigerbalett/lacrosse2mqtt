@@ -786,27 +786,29 @@ void loop(void)
         showing_starfield = false;
     }
     
-    // CPU-Auslastung berechnen
+    // CPU-Auslastung berechnen - optimiert für delay(10) Loop
     loop_count++;
     
     if (millis() - last_cpu_check > 1000) {
-        static unsigned long last_millis = 0;
-        unsigned long current = millis();
-        unsigned long loops_per_sec = loop_count * 1000 / (current - last_millis + 1);
+        // Bei delay(10) sind max ~90 Loops/Sekunde möglich
+        // Realistische Schwellwerte für diesen Code:
+        // - 80-90 loops/s = idle (ca. 10-20% CPU)
+        // - 50-80 loops/s = normal (ca. 20-40% CPU) 
+        // - 30-50 loops/s = beschäftigt (ca. 40-60% CPU)
+        // - < 30 loops/s = überlastet (>60% CPU)
         
-        if (loops_per_sec > 50000) {
-            cpu_usage = 5.0;
-        } else if (loops_per_sec > 10000) {
-            cpu_usage = 20.0;
-        } else if (loops_per_sec > 5000) {
-            cpu_usage = 40.0;
-        } else if (loops_per_sec > 1000) {
-            cpu_usage = 70.0;
+        if (loop_count >= 80) {
+            cpu_usage = 15.0;  // Sehr idle
+        } else if (loop_count >= 60) {
+            cpu_usage = 30.0;  // Leicht beschäftigt
+        } else if (loop_count >= 40) {
+            cpu_usage = 50.0;  // Mäßig beschäftigt
+        } else if (loop_count >= 20) {
+            cpu_usage = 70.0;  // Stark beschäftigt
         } else {
-            cpu_usage = 95.0;
+            cpu_usage = 90.0;  // Überlastet
         }
         
-        last_millis = current;
         loop_count = 0;
         last_cpu_check = millis();
     }
