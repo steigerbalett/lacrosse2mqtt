@@ -21,6 +21,7 @@
 #define LORA_CS 18 // GPIO18 - SX1276 CS
 #define LORA_RST 14 // GPIO14 - SX1276 RST
 #define LORA_IRQ 26 // GPIO26 - SX1276 IRQ (interrupt request)
+#define SS 5  // Standardwert für ESP32
 static const uint8_t KEY_BUILTIN = 0;
 #endif
 #ifndef LED_BUILTIN
@@ -75,15 +76,21 @@ static inline int GetCacheIndex(byte ID, byte channel) {
 
 struct Config {
     String mqtt_server;
+    int mqtt_port;
     String mqtt_user;
     String mqtt_pass;
-    uint16_t mqtt_port;
     bool display_on;
-    bool changed;
     bool ha_discovery;
     bool debug_mode;
     bool screensaver_mode;
     bool mqtt_use_names;
+    bool changed;
+    bool proto_lacrosse;
+    bool proto_wh1080;
+    bool proto_tx38it;
+    bool proto_tx35it;
+    bool proto_ws1600;
+    bool proto_wt440xh;
 };
 
 extern Config config;

@@ -1,4 +1,5 @@
 #include "SX127x.h"
+#include "globals.h"
 #include <SPI.h>
 
 /* datarates in bps which will be cycled in NextDataRate() */
@@ -48,20 +49,6 @@ bool SX127x::Receive(byte &length)
 byte *SX127x::GetPayloadPointer()
 {
     return &m_payload[0];
-}
-
-void SX127x::NextDataRate(byte idx)
-{
-    int rate;
-    if (idx != 0xff)
-        m_datarate = idx;
-    else
-        m_datarate++;
-    m_datarate %= (sizeof(_rates)/sizeof(int));
-    rate = _rates[m_datarate];
-    word r = ((32000000UL + (rate / 2)) / rate);
-    WriteReg(REG_BITRATEMSB, r >> 8);
-    WriteReg(REG_BITRATELSB, r & 0xFF);
 }
 
 void SX127x::SetFrequency(unsigned long kHz)
@@ -182,7 +169,83 @@ int SX127x::GetDataRate()
     return _rates[m_datarate];
 }
 
-int SX127x::GetRSSI()
+int8_t SX127x::GetRSSI()
 {
     return -(m_rssi / 2);
+}
+
+void SX127x::SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842)
+{
+    active_rate_count = 0;
+    
+    if (rate_17241) {
+        active_rates[active_rate_count++] = 17241;
+    }
+    if (rate_9579) {
+        active_rates[active_rate_count++] = 9579;
+    }
+    if (rate_8842) {
+        active_rates[active_rate_count++] = 8842;
+    }
+    
+    // Fallback: Wenn keine Rate aktiv, verwende Standard
+    if (active_rate_count == 0) {
+        active_rates[0] = 17241;
+        active_rate_count = 1;
+    }
+    
+    current_rate_index = 0;
+    
+    Serial.println("Active data rates configured:");
+    for (int i = 0; i < active_rate_count; i++) {
+        Serial.printf("  - %d bps\n", active_rates[i]);
+    }
+}
+
+void SX127x::SetRate(int rate)
+{
+    // Finde den Index der Rate im _rates Array
+    for (int i = 0; i < sizeof(_rates) / sizeof(_rates[0]); i++) {
+        if (_rates[i] == rate) {
+            m_datarate = i;
+            break;
+        }
+    }
+    
+    // Berechne und setze BitRate Register
+    unsigned long br = 32000000L / rate;
+    WriteReg(REG_BITRATEMSB, br >> 8);
+    WriteReg(REG_BITRATELSB, br);
+    
+    Serial.printf("SetRate: %d bps (BR=0x%04X)\n", rate, (unsigned int)br);
+}
+
+void SX127x::NextDataRate(byte idx)
+{
+    if (idx != 0xff && idx < active_rate_count) {
+        current_rate_index = idx;
+    } else {
+        if (active_rate_count == 0) {
+            // Fallback auf alte Funktionsweise
+            static const int rates[] = {17241, 9579, 8842};
+            static byte idx_old = 0;
+            if (idx == 0xff) {
+                idx_old++;
+                if (idx_old > 2) idx_old = 0;
+            } else {
+                idx_old = idx;
+                if (idx_old > 2) idx_old = 0;
+            }
+            SetRate(rates[idx_old]);
+            Serial.printf("Data rate: %d bps\n", rates[idx_old]);
+            return;
+        }
+        
+        // Zyklisch zum nächsten
+        current_rate_index = (current_rate_index + 1) % active_rate_count;
+    }
+    
+    int rate = active_rates[current_rate_index];
+    SetRate(rate);
+    Serial.printf("Data rate: %d bps (index %d/%d)\n", rate, current_rate_index, active_rate_count);
 }

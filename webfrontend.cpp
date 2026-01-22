@@ -36,36 +36,6 @@ void add_debug_log(uint8_t *data, int8_t rssi, int datarate, bool valid) {
 extern uint32_t auto_display_on;
 extern Adafruit_SSD1306 display; 
 
-// 16x16 Pixel Thermometer Favicon
-const uint8_t favicon_ico[] PROGMEM = {
-    0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x10, 0x00, 0x01, 0x00,
-    0x04, 0x00, 0x28, 0x01, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x28, 0x00,
-    0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x01, 0x00,
-    0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF,
-    0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21,
-    0x00, 0x00, 0x00, 0x24, 0x20, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24,
-    0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x14,
-    0x41, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x04, 0x40, 0x00, 0x00, 0x14,
-    0x41, 0x00, 0x00, 0x24, 0x42, 0x00, 0x00, 0x22, 0x22, 0x00, 0x00, 0x02,
-    0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF,
-    0xE7, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF,
-    0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF,
-    0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x81, 0x00, 0x00, 0xFF,
-    0xC3, 0x00, 0x00, 0xFF, 0xC3, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF,
-    0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00
-};
-
 static WebServer server(80);
 static HTTPUpdateServer httpUpdater;
 
@@ -143,10 +113,16 @@ bool load_idmap()
 bool load_config()
 {
     config.display_on = true; /* default */
-    config.ha_discovery = false; /* default */
+    config.ha_discovery = true; /* default */
     config.debug_mode = false; /* default */
     config.screensaver_mode = true; /* default */
     config.mqtt_use_names = true;
+    config.proto_lacrosse = true;
+    config.proto_wh1080 = true;
+    config.proto_tx38it = false;
+    config.proto_tx35it = true;
+    config.proto_ws1600 = true;
+    config.proto_wt440xh = true;
     
     if (!littlefs_ok)
         return false;
@@ -186,7 +162,19 @@ bool load_config()
         if (!doc["mqtt_use_names"].isNull()) {
             config.mqtt_use_names = doc["mqtt_use_names"];
         }
-
+        
+        if (!doc["proto_lacrosse"].isNull())
+            config.proto_lacrosse = doc["proto_lacrosse"];
+        if (!doc["proto_wh1080"].isNull())
+            config.proto_wh1080 = doc["proto_wh1080"];
+        if (!doc["proto_tx38it"].isNull())
+            config.proto_tx38it = doc["proto_tx38it"];
+        if (!doc["proto_tx35it"].isNull())
+            config.proto_tx35it = doc["proto_tx35it"];
+        if (!doc["proto_ws1600"].isNull())
+            config.proto_ws1600 = doc["proto_ws1600"];
+        if (!doc["proto_wt440xh"].isNull())
+            config.proto_wt440xh = doc["proto_wt440xh"];
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -195,7 +183,13 @@ bool load_config()
         Serial.println("ha_discovery: " + String(config.ha_discovery));
         Serial.println("display_on: " + String(config.display_on));
         Serial.println("debug_mode: " + String(config.debug_mode));
-        Serial.println("screensaver_mode: " + String(config.screensaver_mode)); // NEU
+        Serial.println("screensaver_mode: " + String(config.screensaver_mode));
+        Serial.println("proto_lacrosse: " + String(config.proto_lacrosse));
+        Serial.println("proto_wh1080: " + String(config.proto_wh1080));
+        Serial.println("proto_tx38it: " + String(config.proto_tx38it));
+        Serial.println("proto_tx35it: " + String(config.proto_tx35it));
+        Serial.println("proto_ws1600: " + String(config.proto_ws1600));
+        Serial.println("proto_wt440xh: " + String(config.proto_wt440xh));
     }
     
     cfg.close();
@@ -224,6 +218,12 @@ bool save_config()
     doc["debug_mode"] = config.debug_mode;
     doc["screensaver_mode"] = config.screensaver_mode;
     doc["mqtt_use_names"] = config.mqtt_use_names;
+    doc["proto_lacrosse"] = config.proto_lacrosse;
+    doc["proto_wh1080"] = config.proto_wh1080;
+    doc["proto_tx38it"] = config.proto_tx38it;
+    doc["proto_tx35it"] = config.proto_tx35it;
+    doc["proto_ws1600"] = config.proto_ws1600;
+    doc["proto_wt440xh"] = config.proto_wt440xh;
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -425,6 +425,12 @@ static void add_header(String &s, const String &title)
     s = "<!DOCTYPE html><html><head>"
         "<meta charset='UTF-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+        "<circle cx='50' cy='30' r='15' fill='%2303a9f4'/>"
+        "<rect x='43' y='28' width='14' height='45' rx='7' fill='%2303a9f4'/>"
+        "<circle cx='50' cy='70' r='12' fill='%23ff5252'/>"
+        "<rect x='46' y='35' width='8' height='30' fill='%23ff5252'/>"
+        "</svg>\">"
         "<style>"
         ":root { "
             "--primary-color: #03a9f4; "
@@ -534,7 +540,7 @@ static void add_header(String &s, const String &title)
         ".card-full { "
             "grid-column: 1 / -1; "
         "}"
-        "table { "
+                "table { "
             "border-collapse: collapse; "
             "width: 100%; "
             "margin: 12px 0; "
@@ -542,7 +548,7 @@ static void add_header(String &s, const String &title)
             "border-radius: 8px; "
             "overflow: hidden; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
-            "font-size: 13px; "
+            "font-size: 15px; "
             "transition: all 0.3s; "
         "}"
         "[data-theme='dark'] table { "
@@ -552,19 +558,20 @@ static void add_header(String &s, const String &title)
             "background-color: var(--secondary-background-color); "
         "}"
         "th { "
-            "padding: 10px 8px; "
+            "padding: 12px 10px; "
             "text-align: left; "
             "font-weight: 500; "
             "color: var(--primary-text-color); "
             "text-transform: uppercase; "
-            "font-size: 11px; "
+            "font-size: 12px; "
             "letter-spacing: 0.5px; "
             "border-bottom: 1px solid var(--divider-color); "
         "}"
         "td { "
-            "padding: 8px; "
+            "padding: 10px; "
             "border-bottom: 1px solid var(--divider-color); "
             "color: var(--primary-text-color); "
+            "font-size: 15px; "
         "}"
         "tbody tr:hover { "
             "background-color: rgba(3, 169, 244, 0.08); "
@@ -578,7 +585,8 @@ static void add_header(String &s, const String &title)
         ".batt-weak { "
             "color: var(--error-color); "
             "font-weight: 500; "
-            "padding: 3px 6px; "
+            "font-size: 14px; "
+            "padding: 4px 8px; "
             "background-color: rgba(244, 67, 54, 0.15); "
             "border-radius: 4px; "
             "display: inline-block; "
@@ -589,20 +597,23 @@ static void add_header(String &s, const String &title)
         ".batt-ok { "
             "color: var(--success-color); "
             "font-weight: 500; "
+            "font-size: 14px; "
         "}"
         ".init-new { "
             "color: var(--info-color); "
             "font-weight: 500; "
+            "font-size: 14px; "
         "}"
         ".init-no { "
             "color: var(--secondary-text-color); "
+            "font-size: 14px; "
         "}"
         ".raw-data { "
             "font-family: 'Roboto Mono', 'Courier New', monospace; "
-            "font-size: 11px; "
+            "font-size: 12px; "
             "color: var(--primary-color); "
             "background-color: rgba(3, 169, 244, 0.08); "
-            "padding: 3px 6px; "
+            "padding: 4px 8px; "
             "border-radius: 4px; "
         "}"
         "[data-theme='light'] .raw-data { "
@@ -691,20 +702,22 @@ static void add_header(String &s, const String &title)
         "input[type='submit']:active, input[type='button']:active, button:active { "
             "background-color: #01579b; "
         "}"
-        "input[type='radio'] { "
+                "input[type='radio'] { "
             "appearance: none; "
             "-webkit-appearance: none; "
             "-moz-appearance: none; "
             "width: 18px; "
             "height: 18px; "
+            "min-width: 18px; "
+            "min-height: 18px; "
             "border: 2px solid var(--divider-color); "
             "border-radius: 50%; "
-            "margin: 0 6px 0 0; "
+            "margin: 0 8px 0 0; "
             "cursor: pointer; "
             "position: relative; "
             "transition: all 0.2s; "
-            "vertical-align: middle; "
             "background-color: var(--secondary-background-color); "
+            "flex-shrink: 0; "
         "}"
         "input[type='radio']:hover { "
             "border-color: var(--primary-color); "
@@ -730,14 +743,16 @@ static void add_header(String &s, const String &title)
             "-moz-appearance: none; "
             "width: 18px; "
             "height: 18px; "
+            "min-width: 18px; "
+            "min-height: 18px; "
             "border: 2px solid var(--divider-color); "
             "border-radius: 4px; "
-            "margin: 0 6px 0 0; "
+            "margin: 0 8px 0 0; "
             "cursor: pointer; "
             "position: relative; "
             "transition: all 0.2s; "
-            "vertical-align: middle; "
             "background-color: var(--secondary-background-color); "
+            "flex-shrink: 0; "
         "}"
         "input[type='checkbox']:hover { "
             "border-color: var(--primary-color); "
@@ -768,11 +783,23 @@ static void add_header(String &s, const String &title)
         "}"
         ".radio-item { "
             "display: flex; "
-            "align-items: center; "
+            "flex-direction: column; "
             "padding: 6px; "
             "border-radius: 4px; "
             "cursor: pointer; "
             "transition: background-color 0.2s; "
+        "}"
+        ".radio-item label { "
+            "display: flex; "
+            "align-items: center; "
+            "cursor: pointer; "
+            "margin: 0; "
+        "}"
+        ".option-description { "
+            "margin: 4px 0 0 26px; "
+            "color: var(--secondary-text-color); "
+            "font-size: 11px; "
+            "line-height: 1.4; "
         "}"
         ".radio-item:hover { "
             "background-color: rgba(3, 169, 244, 0.08); "
@@ -1002,7 +1029,7 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 static void add_sysinfo_footer(String &s)
 {
     s += "<div class='footer'>"
-         "<p>Powered by LaCrosse2MQTT | "
+         "<a href='https://github.com/steigerbalett/lacrosse2mqtt'>Powered by LaCrosse2MQTT</a> | "
          "<a href='/'>🏠 Home</a> | "
          "<a href='/config.html'>⚙️ Configuration</a> | "
          "<a href='/update'>📦 Update</a>"
@@ -1067,6 +1094,7 @@ static bool config_changed = false;
 
 void handle_config() {
     static unsigned long token = millis();
+    
     if (server.hasArg("id") && server.hasArg("name")) {
         String _id = server.arg("id");
         String name = server.arg("name");
@@ -1172,6 +1200,66 @@ void handle_config() {
         if (tmp != config.ha_discovery)
             config_changed = true;
         config.ha_discovery = tmp;
+    }
+    
+    // Prüfe ob IRGENDEINE Protokoll-Checkbox gesendet wurde
+    bool proto_form_submitted = false;
+    for (int i = 0; i < server.args(); i++) {
+        String argName = server.argName(i);
+        if (argName.startsWith("proto_")) {
+            proto_form_submitted = true;
+            break;
+        }
+    }
+    
+    // Wenn Protokoll-Formular abgeschickt wurde, alle Werte neu setzen
+    if (proto_form_submitted) {
+        Serial.println("Protocol form submitted, updating all protocol settings...");
+        
+        bool new_lacrosse = (server.hasArg("proto_lacrosse") && server.arg("proto_lacrosse") == "1");
+        bool new_wh1080 = (server.hasArg("proto_wh1080") && server.arg("proto_wh1080") == "1");
+        bool new_tx38it = (server.hasArg("proto_tx38it") && server.arg("proto_tx38it") == "1");
+        bool new_tx35it = (server.hasArg("proto_tx35it") && server.arg("proto_tx35it") == "1");
+        bool new_ws1600 = (server.hasArg("proto_ws1600") && server.arg("proto_ws1600") == "1");
+        bool new_wt440xh = (server.hasArg("proto_wt440xh") && server.arg("proto_wt440xh") == "1");
+        
+        // Prüfe auf Änderungen und update
+        if (new_lacrosse != config.proto_lacrosse) {
+            config.proto_lacrosse = new_lacrosse;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("LaCrosse protocol changed to: " + String(config.proto_lacrosse));
+        }
+        if (new_wh1080 != config.proto_wh1080) {
+            config.proto_wh1080 = new_wh1080;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WH1080 protocol changed to: " + String(config.proto_wh1080));
+        }
+        if (new_tx38it != config.proto_tx38it) {
+            config.proto_tx38it = new_tx38it;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("TX38IT protocol changed to: " + String(config.proto_tx38it));
+        }
+        if (new_tx35it != config.proto_tx35it) {
+            config.proto_tx35it = new_tx35it;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("TX35IT protocol changed to: " + String(config.proto_tx35it));
+        }
+        if (new_ws1600 != config.proto_ws1600) {
+            config.proto_ws1600 = new_ws1600;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WS1600 protocol changed to: " + String(config.proto_ws1600));
+        }
+        if (new_wt440xh != config.proto_wt440xh) {
+            config.proto_wt440xh = new_wt440xh;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WT440XH protocol changed to: " + String(config.proto_wt440xh));
+        }
     }
     
     String resp;
@@ -1362,7 +1450,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
 
-    // NEU: MQTT Topic Mode
     resp += "<div class=\"card\">";
     resp += "<h2>MQTT Topic Settings</h2>";
     resp += "<form action=\"config.html\">";
@@ -1387,6 +1474,98 @@ void handle_config() {
     resp += "</div>";
     resp += "</div>";
     resp += "<button type=\"submit\">Update MQTT Topics</button>";
+    resp += "</form>";
+    resp += "</div>";
+
+    resp += "<div class='card'>";
+    resp += "<h2>📡 Protocol Settings</h2>";
+    resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Changes require saving configuration.</p>";
+    resp += "<form action='/config.html'>";
+    
+    // LaCrosse IT+
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>LaCrosse IT+</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_lacrosse' value='1'";
+    if (config.proto_lacrosse) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable LaCrosse IT+ Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TX29-IT, TX27-IT, TX25-U, TX29DTH-IT (17.241 kbps)</div>";
+    resp += "</div>";
+    
+    // WH1080
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WH1080 Weather Station</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wh1080' value='1'";
+    if (config.proto_wh1080) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WH1080 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Weather stations with wind, rain, and temperature data (10 bytes)</div>";
+    resp += "</div>";
+    
+    // TX38IT
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>TX38IT Indoor</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tx38it' value='1'";
+    if (config.proto_tx38it) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable TX38IT Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Indoor temperature sensors (8.842 kbps)</div>";
+    resp += "</div>";
+    
+    // TX35IT
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>TX35-IT/TX35DTH-IT</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tx35it' value='1'";
+    if (config.proto_tx35it) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable TX35-IT Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TX35-IT, TX35DTH-IT sensors (9.579 kbps)</div>";
+    resp += "</div>";
+
+    // WS1600
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WS1600 Weather</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_ws1600' value='1'";
+    if (config.proto_ws1600) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WS1600 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Weather sensors (9 bytes)</div>";
+    resp += "</div>";
+    
+    // WT440XH
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WT440XH Temp/Humidity</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wt440xh' value='1'";
+    if (config.proto_wt440xh) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WT440XH Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Compact temperature/humidity sensors (4 bytes)</div>";
+    resp += "</div>";
+    
     resp += "</form>";
     resp += "</div>";
 
@@ -1458,6 +1637,119 @@ void handle_debug() {
     server.send(200, "text/html", resp);
 }
 
+// Schöne Upload-Seite
+void handle_update_page() {
+    String page;
+    add_header(page, "Firmware Update");
+    
+    page += "<div class='card'>";
+    page += "<h2>📦 Firmware Update</h2>";
+    page += "<p class='info-text'>Upload a new firmware binary (.bin file) to update your device.</p>";
+    
+    page += "<div style='background-color: rgba(255, 152, 0, 0.1); border: 1px solid var(--warning-color); border-radius: 8px; padding: 16px; margin: 16px 0;'>";
+    page += "<p style='margin: 0; color: var(--warning-color); font-weight: 500;'>⚠️ Warning</p>";
+    page += "<p style='margin: 8px 0 0 0; font-size: 13px;'>The device will restart after the update. Make sure you have the correct firmware file.</p>";
+    page += "</div>";
+    
+    page += "<form method='POST' action='/update' enctype='multipart/form-data' id='upload_form'>";
+    page += "<div style='margin: 20px 0;'>";
+    page += "<label style='display: block; margin-bottom: 8px; font-weight: 500;'>Select Firmware File (.bin)</label>";
+    page += "<input type='file' name='update' accept='.bin' id='file_input' required ";
+    page += "style='width: 100%; padding: 12px; border: 2px dashed var(--divider-color); border-radius: 8px; ";
+    page += "background-color: var(--secondary-background-color); cursor: pointer;'>";
+    page += "<p id='file_info' style='margin-top: 8px; font-size: 12px; color: var(--secondary-text-color);'></p>";
+    page += "</div>";
+    
+    page += "<div style='margin: 20px 0;'>";
+    page += "<div id='progress_container' style='display: none; margin-bottom: 16px;'>";
+    page += "<div style='background-color: var(--secondary-background-color); border-radius: 8px; height: 30px; overflow: hidden; border: 1px solid var(--divider-color);'>";
+    page += "<div id='progress_bar' style='height: 100%; background: linear-gradient(90deg, var(--primary-color), var(--accent-color)); width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 500; font-size: 13px;'></div>";
+    page += "</div>";
+    page += "<p id='progress_text' style='text-align: center; margin-top: 8px; font-size: 13px; color: var(--primary-text-color);'></p>";
+    page += "</div>";
+    
+    page += "<button type='submit' id='upload_button' class='action-button' style='width: 100%; padding: 14px; font-size: 15px;'>";
+    page += "🚀 Upload Firmware";
+    page += "</button>";
+    page += "</div>";
+    page += "</form>";
+    
+    page += "<div style='margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--divider-color);'>";
+    page += "<h3>Current Firmware</h3>";
+    page += "<p class='info-text'>Version: " + String(LACROSSE2MQTT_VERSION) + "</p>";
+    page += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
+    page += "</div>";
+    page += "</div>";
+    
+    page += "<div class='card' style='margin-top: 16px;'>";
+    page += "<h3>💡 Instructions</h3>";
+    page += "<ol style='margin: 8px 0; padding-left: 24px; color: var(--primary-text-color);'>";
+    page += "<li style='margin: 8px 0;'>Download the latest firmware .bin file</li>";
+    page += "<li style='margin: 8px 0;'>Select the file using the button above</li>";
+    page += "<li style='margin: 8px 0;'>Click 'Upload Firmware' and wait for completion</li>";
+    page += "<li style='margin: 8px 0;'>Device will restart automatically after update</li>";
+    page += "</ol>";
+    page += "<p style='margin-top: 16px;'><a href='/' class='action-button'>← Back to Main Page</a></p>";
+    page += "</div>";
+    
+    // JavaScript für Upload-Progress und File-Info
+    page += "<script>";
+    page += "document.getElementById('file_input').addEventListener('change', function(e) {";
+    page += "  var file = e.target.files[0];";
+    page += "  if (file) {";
+    page += "    var size = (file.size / 1024 / 1024).toFixed(2);";
+    page += "    document.getElementById('file_info').textContent = '📄 ' + file.name + ' (' + size + ' MB)';";
+    page += "  }";
+    page += "});";
+    
+    page += "document.getElementById('upload_form').addEventListener('submit', function(e) {";
+    page += "  e.preventDefault();";
+    page += "  var formData = new FormData(this);";
+    page += "  var xhr = new XMLHttpRequest();";
+    page += "  ";
+    page += "  document.getElementById('progress_container').style.display = 'block';";
+    page += "  document.getElementById('upload_button').disabled = true;";
+    page += "  document.getElementById('upload_button').style.opacity = '0.5';";
+    page += "  document.getElementById('upload_button').textContent = '⏳ Uploading...';";
+    page += "  ";
+    page += "  xhr.upload.addEventListener('progress', function(e) {";
+    page += "    if (e.lengthComputable) {";
+    page += "      var percent = Math.round((e.loaded / e.total) * 100);";
+    page += "      document.getElementById('progress_bar').style.width = percent + '%';";
+    page += "      document.getElementById('progress_bar').textContent = percent + '%';";
+    page += "      document.getElementById('progress_text').textContent = 'Uploading: ' + (e.loaded / 1024 / 1024).toFixed(1) + ' MB / ' + (e.total / 1024 / 1024).toFixed(1) + ' MB';";
+    page += "    }";
+    page += "  });";
+    page += "  ";
+    page += "  xhr.addEventListener('load', function() {";
+    page += "    if (xhr.status === 200) {";
+    page += "      document.getElementById('progress_text').innerHTML = '<span style=\"color: var(--success-color);\">✓ Upload successful! Device is restarting...</span>';";
+    page += "      document.getElementById('upload_button').textContent = '✓ Success!';";
+    page += "      setTimeout(function() { window.location.href = '/'; }, 15000);";
+    page += "    } else {";
+    page += "      document.getElementById('progress_text').innerHTML = '<span style=\"color: var(--error-color);\">✗ Upload failed: ' + xhr.statusText + '</span>';";
+    page += "      document.getElementById('upload_button').disabled = false;";
+    page += "      document.getElementById('upload_button').style.opacity = '1';";
+    page += "      document.getElementById('upload_button').textContent = '🔄 Try Again';";
+    page += "    }";
+    page += "  });";
+    page += "  ";
+    page += "  xhr.addEventListener('error', function() {";
+    page += "    document.getElementById('progress_text').innerHTML = '<span style=\"color: var(--error-color);\">✗ Network error occurred</span>';";
+    page += "    document.getElementById('upload_button').disabled = false;";
+    page += "    document.getElementById('upload_button').style.opacity = '1';";
+    page += "    document.getElementById('upload_button').textContent = '🔄 Try Again';";
+    page += "  });";
+    page += "  ";
+    page += "  xhr.open('POST', '/update', true);";
+    page += "  xhr.send(formData);";
+    page += "});";
+    page += "</script>";
+    
+    add_sysinfo_footer(page);
+    server.send(200, "text/html", page);
+}
+
 void setup_web()
 {
     if (!load_idmap())
@@ -1468,16 +1760,14 @@ void setup_web()
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
     server.on("/config.html", handle_config);
-    server.on("/debug.html", handle_debug);  // NEU
+    server.on("/debug.html", handle_debug);
+    server.on("/update", HTTP_GET, handle_update_page);
     
-    server.on("/favicon.ico", HTTP_GET, []() {
-        server.send_P(200, "image/x-icon", (const char*)favicon_ico, sizeof(favicon_ico));
-    });
-
-    server.onNotFound([](){
+    server.onNotFound([]() {
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
         Serial.println("404: " + server.uri());
     });
+    
     httpUpdater.setup(&server);
     server.begin();
 }

@@ -1,45 +1,43 @@
-#ifndef __SX127x_h
-#define __SX127x_h
+#ifndef _SX127x_H
+#define _SX127x_H
 
 #include <Arduino.h>
-#include "globals.h"
-#define PAYLOADSIZE 64
+#include "sx1276Regs-Fsk.h"
 
 class SX127x {
 public:
-  enum radio_type {
-    Unknown,
-    SX127X = 1
-  };
-
-  SX127x(byte ss=SS, byte reset=-1);
-  bool init();
   void SetupForLaCrosse();
-  void NextDataRate(byte idx = 0xff);
-  void SetFrequency(unsigned long kHz);
+  void SetFrequency(unsigned long f);
+  bool Receive(byte &payLoadSize);
   int GetDataRate();
-  int GetRSSI();
-  void EnableReceiver(bool enable, int len = FRAME_LENGTH);
-  static byte CalculateCRC(byte data[], int len);
-  bool ready();
-  bool Receive(byte &length);
+  int8_t GetRSSI();
   byte *GetPayloadPointer();
+  void EnableReceiver(bool enable, int len = 5);
+  void SetRate(int rate);
+  void NextDataRate(byte idx = 0xff);
+  void SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842);
+  bool init();
+  
+  SX127x(byte ss, byte reset);
 
 private:
-  byte m_ss, m_reset;
-  int m_datarate;
-  unsigned long m_frequency;
-  bool m_payloadready;
-  byte m_payload[PAYLOADSIZE];
-  byte m_rssi;
-
+  void WriteReg(byte addr, byte data);
   byte ReadReg(byte addr);
-  void WriteReg(byte addr, byte value);
   byte GetByteFromFifo();
   void ClearFifo();
-
+  bool ready();
+  
+  byte m_ss;
+  byte m_reset;
+  byte m_datarate;
+  unsigned long m_frequency;
+  bool m_payloadready;
+  byte m_payload[32];
+  int8_t m_rssi;
+  
+  int active_rates[3];      
+  int active_rate_count;    
+  int current_rate_index;   
 };
 
-/* use header from semtech SDK */
-#include "sx1276Regs-Fsk.h"
 #endif
