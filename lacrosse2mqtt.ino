@@ -23,25 +23,27 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <WiFiManager.h>
 #include "wifi_functions.h"
 #include "webfrontend.h"
 #include "globals.h"
 #include "lacrosse.h"
 #include "SX127x.h"
-#include <WiFiManager.h>
-
+#include "lacrosse.h"
+#include "wh1080.h"
+#include "tx38it.h"
+#include "tx35it.h"
+#include "ws1600.h"
+#include "wt440xh.h"
 
 #define FORMAT_LITTLEFS_IF_FAILED false
-
 
 /* if display is default to off, keep it on for this many seconds after power on
  * or a wifi change event */
 #define DISPLAY_TIMEOUT 300
 
-
 const int interval = 20;   /* toggle interval in seconds */
 const int freq = 868290;   /* frequency in kHz, 868300 did not receive all sensors... */
-
 
 unsigned long last_reconnect;
 unsigned long last_switch = 0;
@@ -176,12 +178,18 @@ void check_repeatedjobs()
 {
     unsigned long now = millis();
     if (now - last_switch > interval * 1000) {
-        SX.NextDataRate();
+        SX.NextDataRate();  // Wechselt automatisch nur durch aktive Raten
         last_switch = now;
     }
     if (config.changed) {
         Serial.println("MQTT config changed. Dis- and reconnecting...");
         config.changed = false;
+
+        bool use_17241 = config.proto_lacrosse;
+        bool use_9579 = config.proto_tx35it;
+        bool use_8842 = config.proto_tx38it;
+        SX.SetActiveDataRates(use_17241, use_9579, use_8842);
+        SX.NextDataRate(0);
         if (mqtt_ok) {
             String statusTopic = pub_base + "status";
             mqtt_client.publish(statusTopic.c_str(), "offline", true);
@@ -379,6 +387,137 @@ void pub_hass_battery_config(byte ID)
     mqtt_client.endPublish();
 }
 
+void publishToMQTT_WH1080(WH1080::Frame *f) {
+    String mqttBaseTopic;
+    String sensorIdentifier;
+    
+    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
+        sensorIdentifier = id2name[f->ID];
+        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+    } else {
+        sensorIdentifier = String(f->ID, DEC);
+        mqttBaseTopic = pub_base + sensorIdentifier + "/";
+    }
+    
+    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
+    mqtt_client.publish((mqttBaseTopic + "rain").c_str(), String(f->rain, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "wind_speed").c_str(), String(f->wind_speed, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "wind_gust").c_str(), String(f->wind_gust, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "wind_dir").c_str(), WH1080::GetWindDirection(f->wind_bearing));
+    
+    String state = "{"
+        "\"RSSI\": " + String(f->rssi, DEC) +
+        ", \"type\": \"WH1080\"" +
+        ", \"station_id\": " + String(f->station_id) +
+        "}";
+    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+}
+
+void publishToMQTT_TX38(TX38IT::Frame *f) {
+    String mqttBaseTopic;
+    String sensorIdentifier;
+    
+    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
+        sensorIdentifier = id2name[f->ID];
+        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+    } else {
+        sensorIdentifier = String(f->ID, DEC);
+        mqttBaseTopic = pub_base + sensorIdentifier + "/";
+    }
+    
+    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
+    
+    if (f->humi > 0 && f->humi <= 100) {
+        mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
+    }
+    
+    String state = "{"
+        "\"low_batt\": " + String(f->batlo?"true":"false") +
+        ", \"init\": " + String(f->init?"true":"false") +
+        ", \"RSSI\": " + String(f->rssi, DEC) +
+        ", \"type\": \"TX38IT\"" +
+        "}";
+    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+}
+
+void publishToMQTT_TX35(TX35IT::Frame *f) {
+    String mqttBaseTopic;
+    String sensorIdentifier;
+    
+    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
+        sensorIdentifier = id2name[f->ID];
+        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+    } else {
+        sensorIdentifier = String(f->ID, DEC);
+        mqttBaseTopic = pub_base + sensorIdentifier + "/";
+    }
+    
+    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
+    
+    if (f->humi > 0 && f->humi <= 100) {
+        mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
+    }
+    
+    String state = "{"
+        "\"low_batt\": " + String(f->batlo?"true":"false") +
+        ", \"init\": " + String(f->init?"true":"false") +
+        ", \"RSSI\": " + String(f->rssi, DEC) +
+        ", \"type\": \"TX35-IT\"" +
+        "}";
+    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+}
+
+void publishToMQTT_WS1600(WS1600::Frame *f) {
+    String mqttBaseTopic;
+    String sensorIdentifier;
+    
+    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
+        sensorIdentifier = id2name[f->ID];
+        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+    } else {
+        sensorIdentifier = String(f->ID, DEC);
+        mqttBaseTopic = pub_base + sensorIdentifier + "/";
+    }
+    
+    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
+    mqtt_client.publish((mqttBaseTopic + "rain").c_str(), String(f->rain, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "wind_speed").c_str(), String(f->wind_speed, 1).c_str());
+    
+    String state = "{"
+        "\"low_batt\": " + String(f->batlo?"true":"false") +
+        ", \"RSSI\": " + String(f->rssi, DEC) +
+        ", \"type\": \"WS1600\"" +
+        ", \"channel\": " + String(f->channel) +
+        "}";
+    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+}
+
+void publishToMQTT_WT440(WT440XH::Frame *f) {
+    String mqttBaseTopic;
+    String sensorIdentifier;
+    
+    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
+        sensorIdentifier = id2name[f->ID];
+        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+    } else {
+        sensorIdentifier = String(f->ID, DEC);
+        mqttBaseTopic = pub_base + sensorIdentifier + "/";
+    }
+    
+    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
+    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
+    
+    String state = "{"
+        "\"low_batt\": " + String(f->batlo?"true":"false") +
+        ", \"RSSI\": " + String(f->rssi, DEC) +
+        ", \"type\": \"WT440XH\"" +
+        ", \"channel\": " + String(f->channel) +
+        "}";
+    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+}
+
 void expire_cache()
 {
     unsigned long now = millis();
@@ -509,117 +648,231 @@ void receive()
         Serial.println(rate);
     }
 
-    LaCrosse::Frame frame;
-    frame.rate = rate;
-    frame.rssi = rssi;
+    bool frame_valid = false;
     
-    bool frame_valid = LaCrosse::TryHandleData(payload, &frame);
-    add_debug_log(payload, rssi, rate, frame_valid);
-    
-    if (frame_valid) {
-        byte ID = frame.ID;
-        byte channel = frame.channel;
+    // 1. Versuche LaCrosse IT+ (5 Bytes, 17241 bps)
+    if (payLoadSize == FRAME_LENGTH && config.proto_lacrosse) {
+        LaCrosse::Frame lacrosse_frame;
+        lacrosse_frame.rate = rate;
+        lacrosse_frame.rssi = rssi;
         
-        const char* sensorType = LaCrosse::GetSensorType(&frame);
-        
-        int cacheIndex = GetCacheIndex(ID, channel);
-        
-        if (cacheIndex >= SENSOR_NUM) {
-            Serial.printf("ERROR: Cache index %d out of bounds for ID%d Ch%d\n", 
-                         cacheIndex, ID, channel);
+        if (LaCrosse::TryHandleData(payload, &lacrosse_frame)) {
+            frame_valid = true;
+            add_debug_log(payload, rssi, rate, frame_valid);
+            
+            byte ID = lacrosse_frame.ID;
+            byte channel = lacrosse_frame.channel;
+            const char* sensorType = LaCrosse::GetSensorType(&lacrosse_frame);
+            
+            int cacheIndex = GetCacheIndex(ID, channel);
+            
+            if (cacheIndex < SENSOR_NUM) {
+                LaCrosse::Frame oldframe;
+                if (fcache[cacheIndex].timestamp > 0) {
+                    LaCrosse::TryHandleData(fcache[cacheIndex].data, &oldframe);
+                } else {
+                    oldframe.valid = false;
+                }
+                
+                fcache[cacheIndex].ID = lacrosse_frame.ID;
+                fcache[cacheIndex].rate = lacrosse_frame.rate;
+                fcache[cacheIndex].rssi = rssi;
+                fcache[cacheIndex].timestamp = millis();
+                memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
+                fcache[cacheIndex].temp = lacrosse_frame.temp;
+                fcache[cacheIndex].humi = lacrosse_frame.humi;
+                fcache[cacheIndex].batlo = lacrosse_frame.batlo;
+                fcache[cacheIndex].init = lacrosse_frame.init;
+                fcache[cacheIndex].valid = lacrosse_frame.valid;
+                fcache[cacheIndex].channel = lacrosse_frame.channel;
+                
+                strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
+                fcache[cacheIndex].sensorType[15] = '\0';
+                
+                LaCrosse::DisplayFrame(payload, &lacrosse_frame);
+                
+                // MQTT Publishing
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    if (channel == 2) {
+                        sensorIdentifier += "_Ch2";
+                    }
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    if (channel == 2)
+                        sensorIdentifier += "/ch2";
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(lacrosse_frame.temp, 1).c_str());
+                
+                if (lacrosse_frame.humi > 0 && lacrosse_frame.humi <= 100) {
+                    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(lacrosse_frame.humi, DEC).c_str());
+                }
+                
+                String state = "{"
+                    "\"low_batt\": " + String(lacrosse_frame.batlo?"true":"false") +
+                     ", \"init\": " + String(lacrosse_frame.init?"true":"false") +
+                     ", \"RSSI\": " + String(rssi, DEC) +
+                     ", \"baud\": " + String(lacrosse_frame.rate / 1000.0, 3) +
+                     ", \"channel\": " + String(lacrosse_frame.channel) +
+                     ", \"type\": \"" + String(sensorType) + "\"" +
+                     "}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    if (oldframe.valid && abs(oldframe.temp - lacrosse_frame.temp) > 2.0) {
+                        Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - lacrosse_frame.temp, 1));
+                    } else {
+                        int haConfig = (channel == 2) ? 2 : 1;
+                        pub_hass_config(haConfig, ID, channel);
+                    }
+                    
+                    if (lacrosse_frame.humi > 0 && lacrosse_frame.humi <= 100) {
+                        if (oldframe.valid && abs(oldframe.humi - lacrosse_frame.humi) > 10) {
+                            Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - lacrosse_frame.humi, DEC));
+                        } else {
+                            pub_hass_config(0, ID, channel);
+                        }
+                    }
+                }
+            }
+            
+            if (!showing_starfield) {
+                LaCrosse::Frame dummy_frame;
+                update_display(&dummy_frame);
+            }
+            
+            SX.EnableReceiver(true);
             digitalWrite(LED_BUILTIN, LOW);
             return;
         }
-
-        LaCrosse::Frame oldframe;
-        if (fcache[cacheIndex].timestamp > 0) {
-            LaCrosse::TryHandleData(fcache[cacheIndex].data, &oldframe);
-        } else {
-            oldframe.valid = false;
-        }
         
-        // Cache aktualisieren
-        fcache[cacheIndex].ID = frame.ID;
-        fcache[cacheIndex].rate = frame.rate;
-        fcache[cacheIndex].rssi = rssi;
-        fcache[cacheIndex].timestamp = millis();
-        memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
-        fcache[cacheIndex].temp = frame.temp;
-        fcache[cacheIndex].humi = frame.humi;
-        fcache[cacheIndex].batlo = frame.batlo;
-        fcache[cacheIndex].init = frame.init;
-        fcache[cacheIndex].valid = frame.valid;
-        fcache[cacheIndex].channel = frame.channel;
-        
-        strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
-        fcache[cacheIndex].sensorType[15] = '\0';
-        
-        LaCrosse::DisplayFrame(payload, &frame);
-        
-        // NEU: MQTT Topic-Struktur basierend auf Einstellung
-        String mqttBaseTopic;
-        String sensorIdentifier;
-        
-        if (config.mqtt_use_names && id2name[ID].length() > 0) {
-            // Namen-Modus: climate/Wohnzimmer/temp
-            sensorIdentifier = id2name[ID];
-            if (channel == 2) {
-                sensorIdentifier += "_Ch2";
+        // 2. Versuche TX38IT (5 Bytes, 8842 bps)
+        if (config.proto_tx38it && rate == 8842) {
+            TX38IT::Frame tx38_frame;
+            tx38_frame.rssi = rssi;
+            tx38_frame.rate = rate;
+            
+            if (TX38IT::TryHandleData(payload, &tx38_frame)) {
+                frame_valid = true;
+                add_debug_log(payload, rssi, rate, frame_valid);
+                TX38IT::DisplayFrame(payload, &tx38_frame);
+                publishToMQTT_TX38(&tx38_frame);
+                
+                if (!showing_starfield) {
+                    LaCrosse::Frame dummy_frame;
+                    update_display(&dummy_frame);
+                }
+                
+                SX.EnableReceiver(true);
+                digitalWrite(LED_BUILTIN, LOW);
+                return;
             }
-            mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-        } else {
-            // ID-Modus: lacrosse/id/30/temp oder lacrosse/id/30/ch2/temp
-            sensorIdentifier = String(ID, DEC);
-            if (channel == 2)
-                sensorIdentifier += "/ch2";
-            mqttBaseTopic = pub_base + sensorIdentifier + "/";
         }
         
-        // MQTT Publish
-        mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(frame.temp, 1).c_str());
-        
-        if (frame.humi > 0 && frame.humi <= 100) {
-            mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(frame.humi, DEC).c_str());
+        // 3. Versuche TX35IT (5 Bytes, 9579 bps)
+        if (config.proto_tx35it && rate == 9579) {
+            TX35IT::Frame tx35_frame;
+            tx35_frame.rssi = rssi;
+            tx35_frame.rate = rate;
+            
+            if (TX35IT::TryHandleData(payload, &tx35_frame)) {
+                frame_valid = true;
+                add_debug_log(payload, rssi, rate, frame_valid);
+                TX35IT::DisplayFrame(payload, &tx35_frame);
+                publishToMQTT_TX35(&tx35_frame);
+                
+                if (!showing_starfield) {
+                    LaCrosse::Frame dummy_frame;
+                    update_display(&dummy_frame);
+                }
+                
+                SX.EnableReceiver(true);
+                digitalWrite(LED_BUILTIN, LOW);
+                return;
+            }
         }
+    }
+    
+    // 4. Versuche WH1080 (10 Bytes)
+    if (payLoadSize == 10 && config.proto_wh1080) {
+        WH1080::Frame wh1080_frame;
+        wh1080_frame.rssi = rssi;
+        wh1080_frame.rate = rate;
         
-        // MQTT state
-        String state = ""
-            "{\"low_batt\": " + String(frame.batlo?"true":"false") +
-             ", \"init\": " + String(frame.init?"true":"false") +
-             ", \"RSSI\": " + String(rssi, DEC) +
-             ", \"baud\": " + String(frame.rate / 1000.0, 3) +
-             ", \"channel\": " + String(frame.channel) +
-             ", \"type\": \"" + String(sensorType) + "\"" +
-             "}";
-        mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-        
-        // Home Assistant Discovery (nur wenn HA Discovery aktiviert und Namen vergeben)
-        if (config.ha_discovery && id2name[ID].length() > 0) {
-            if (oldframe.valid && abs(oldframe.temp - frame.temp) > 2.0) {
-                Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - frame.temp, 1));
-            } else {
-                int haConfig = (channel == 2) ? 2 : 1;
-                pub_hass_config(haConfig, ID, channel);
+        if (WH1080::TryHandleData(payload, payLoadSize, &wh1080_frame)) {
+            frame_valid = true;
+            add_debug_log(payload, rssi, rate, frame_valid);
+            WH1080::DisplayFrame(payload, payLoadSize, &wh1080_frame);
+            publishToMQTT_WH1080(&wh1080_frame);
+            
+            if (!showing_starfield) {
+                LaCrosse::Frame dummy_frame;
+                update_display(&dummy_frame);
             }
             
-            if (frame.humi > 0 && frame.humi <= 100) {
-                if (oldframe.valid && abs(oldframe.humi - frame.humi) > 10) {
-                    Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - frame.humi, DEC));
-                } else {
-                    pub_hass_config(0, ID, channel);
-                }
-            }
+            SX.EnableReceiver(true);
+            digitalWrite(LED_BUILTIN, LOW);
+            return;
         }
-
-    } else {
-        static unsigned long last;
-        LaCrosse::DisplayRaw(last, "Unknown", payload, payLoadSize, rssi, rate);
-        Serial.println();
     }
-
-    if (!showing_starfield) {
-        update_display(&frame);
+    
+    // 5. Versuche WS1600 (9 Bytes)
+    if (payLoadSize == 9 && config.proto_ws1600) {
+        WS1600::Frame ws1600_frame;
+        ws1600_frame.rssi = rssi;
+        ws1600_frame.rate = rate;
+        
+        if (WS1600::TryHandleData(payload, payLoadSize, &ws1600_frame)) {
+            frame_valid = true;
+            add_debug_log(payload, rssi, rate, frame_valid);
+            WS1600::DisplayFrame(payload, payLoadSize, &ws1600_frame);
+            publishToMQTT_WS1600(&ws1600_frame);
+            
+            if (!showing_starfield) {
+                LaCrosse::Frame dummy_frame;
+                update_display(&dummy_frame);
+            }
+            
+            SX.EnableReceiver(true);
+            digitalWrite(LED_BUILTIN, LOW);
+            return;
+        }
     }
+    
+    // 6. Versuche WT440XH (4 Bytes)
+    if (payLoadSize == 4 && config.proto_wt440xh) {
+        WT440XH::Frame wt440_frame;
+        wt440_frame.rssi = rssi;
+        wt440_frame.rate = rate;
+        
+        if (WT440XH::TryHandleData(payload, &wt440_frame)) {
+            frame_valid = true;
+            add_debug_log(payload, rssi, rate, frame_valid);
+            WT440XH::DisplayFrame(payload, &wt440_frame);
+            publishToMQTT_WT440(&wt440_frame);
+            
+            if (!showing_starfield) {
+                LaCrosse::Frame dummy_frame;
+                update_display(&dummy_frame);
+            }
+            
+            SX.EnableReceiver(true);
+            digitalWrite(LED_BUILTIN, LOW);
+            return;
+        }
+    }
+    
+    // Unbekanntes Protokoll
+    static unsigned long last;
+    LaCrosse::DisplayRaw(last, "Unknown", payload, payLoadSize, rssi, rate);
+    Serial.println();
+    add_debug_log(payload, rssi, rate, false);
     
     SX.EnableReceiver(true);
     digitalWrite(LED_BUILTIN, LOW);
@@ -708,9 +961,16 @@ void setup(void)
             delay(1000);
     }
     SX.SetupForLaCrosse();
+    // Konfiguriere aktive Datenraten basierend auf Protokollen
+    bool use_17241 = config.proto_lacrosse;
+    bool use_9579 = config.proto_tx35it;
+    bool use_8842 = config.proto_tx38it;
+    
+    SX.SetActiveDataRates(use_17241, use_9579, use_8842);
     SX.SetFrequency(freq);
-    SX.NextDataRate(0);
+    SX.NextDataRate(0);  // Starte mit erster Rate
     SX.EnableReceiver(true);
+
 }
 
 

@@ -113,10 +113,16 @@ bool load_idmap()
 bool load_config()
 {
     config.display_on = true; /* default */
-    config.ha_discovery = false; /* default */
+    config.ha_discovery = true; /* default */
     config.debug_mode = false; /* default */
     config.screensaver_mode = true; /* default */
     config.mqtt_use_names = true;
+    config.proto_lacrosse = true;
+    config.proto_wh1080 = true;
+    config.proto_tx38it = false;
+    config.proto_tx35it = true;
+    config.proto_ws1600 = true;
+    config.proto_wt440xh = true;
     
     if (!littlefs_ok)
         return false;
@@ -156,7 +162,19 @@ bool load_config()
         if (!doc["mqtt_use_names"].isNull()) {
             config.mqtt_use_names = doc["mqtt_use_names"];
         }
-
+        
+        if (!doc["proto_lacrosse"].isNull())
+            config.proto_lacrosse = doc["proto_lacrosse"];
+        if (!doc["proto_wh1080"].isNull())
+            config.proto_wh1080 = doc["proto_wh1080"];
+        if (!doc["proto_tx38it"].isNull())
+            config.proto_tx38it = doc["proto_tx38it"];
+        if (!doc["proto_tx35it"].isNull())
+            config.proto_tx35it = doc["proto_tx35it"];
+        if (!doc["proto_ws1600"].isNull())
+            config.proto_ws1600 = doc["proto_ws1600"];
+        if (!doc["proto_wt440xh"].isNull())
+            config.proto_wt440xh = doc["proto_wt440xh"];
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -165,7 +183,13 @@ bool load_config()
         Serial.println("ha_discovery: " + String(config.ha_discovery));
         Serial.println("display_on: " + String(config.display_on));
         Serial.println("debug_mode: " + String(config.debug_mode));
-        Serial.println("screensaver_mode: " + String(config.screensaver_mode)); // NEU
+        Serial.println("screensaver_mode: " + String(config.screensaver_mode));
+        Serial.println("proto_lacrosse: " + String(config.proto_lacrosse));
+        Serial.println("proto_wh1080: " + String(config.proto_wh1080));
+        Serial.println("proto_tx38it: " + String(config.proto_tx38it));
+        Serial.println("proto_tx35it: " + String(config.proto_tx35it));
+        Serial.println("proto_ws1600: " + String(config.proto_ws1600));
+        Serial.println("proto_wt440xh: " + String(config.proto_wt440xh));
     }
     
     cfg.close();
@@ -194,6 +218,12 @@ bool save_config()
     doc["debug_mode"] = config.debug_mode;
     doc["screensaver_mode"] = config.screensaver_mode;
     doc["mqtt_use_names"] = config.mqtt_use_names;
+    doc["proto_lacrosse"] = config.proto_lacrosse;
+    doc["proto_wh1080"] = config.proto_wh1080;
+    doc["proto_tx38it"] = config.proto_tx38it;
+    doc["proto_tx35it"] = config.proto_tx35it;
+    doc["proto_ws1600"] = config.proto_ws1600;
+    doc["proto_wt440xh"] = config.proto_wt440xh;
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -510,7 +540,7 @@ static void add_header(String &s, const String &title)
         ".card-full { "
             "grid-column: 1 / -1; "
         "}"
-        "table { "
+                "table { "
             "border-collapse: collapse; "
             "width: 100%; "
             "margin: 12px 0; "
@@ -518,7 +548,7 @@ static void add_header(String &s, const String &title)
             "border-radius: 8px; "
             "overflow: hidden; "
             "box-shadow: 0 2px 4px rgba(0,0,0,0.1); "
-            "font-size: 13px; "
+            "font-size: 15px; "
             "transition: all 0.3s; "
         "}"
         "[data-theme='dark'] table { "
@@ -528,19 +558,20 @@ static void add_header(String &s, const String &title)
             "background-color: var(--secondary-background-color); "
         "}"
         "th { "
-            "padding: 10px 8px; "
+            "padding: 12px 10px; "
             "text-align: left; "
             "font-weight: 500; "
             "color: var(--primary-text-color); "
             "text-transform: uppercase; "
-            "font-size: 11px; "
+            "font-size: 12px; "
             "letter-spacing: 0.5px; "
             "border-bottom: 1px solid var(--divider-color); "
         "}"
         "td { "
-            "padding: 8px; "
+            "padding: 10px; "
             "border-bottom: 1px solid var(--divider-color); "
             "color: var(--primary-text-color); "
+            "font-size: 15px; "
         "}"
         "tbody tr:hover { "
             "background-color: rgba(3, 169, 244, 0.08); "
@@ -554,7 +585,8 @@ static void add_header(String &s, const String &title)
         ".batt-weak { "
             "color: var(--error-color); "
             "font-weight: 500; "
-            "padding: 3px 6px; "
+            "font-size: 14px; "
+            "padding: 4px 8px; "
             "background-color: rgba(244, 67, 54, 0.15); "
             "border-radius: 4px; "
             "display: inline-block; "
@@ -565,20 +597,23 @@ static void add_header(String &s, const String &title)
         ".batt-ok { "
             "color: var(--success-color); "
             "font-weight: 500; "
+            "font-size: 14px; "
         "}"
         ".init-new { "
             "color: var(--info-color); "
             "font-weight: 500; "
+            "font-size: 14px; "
         "}"
         ".init-no { "
             "color: var(--secondary-text-color); "
+            "font-size: 14px; "
         "}"
         ".raw-data { "
             "font-family: 'Roboto Mono', 'Courier New', monospace; "
-            "font-size: 11px; "
+            "font-size: 12px; "
             "color: var(--primary-color); "
             "background-color: rgba(3, 169, 244, 0.08); "
-            "padding: 3px 6px; "
+            "padding: 4px 8px; "
             "border-radius: 4px; "
         "}"
         "[data-theme='light'] .raw-data { "
@@ -667,20 +702,22 @@ static void add_header(String &s, const String &title)
         "input[type='submit']:active, input[type='button']:active, button:active { "
             "background-color: #01579b; "
         "}"
-        "input[type='radio'] { "
+                "input[type='radio'] { "
             "appearance: none; "
             "-webkit-appearance: none; "
             "-moz-appearance: none; "
             "width: 18px; "
             "height: 18px; "
+            "min-width: 18px; "
+            "min-height: 18px; "
             "border: 2px solid var(--divider-color); "
             "border-radius: 50%; "
-            "margin: 0 6px 0 0; "
+            "margin: 0 8px 0 0; "
             "cursor: pointer; "
             "position: relative; "
             "transition: all 0.2s; "
-            "vertical-align: middle; "
             "background-color: var(--secondary-background-color); "
+            "flex-shrink: 0; "
         "}"
         "input[type='radio']:hover { "
             "border-color: var(--primary-color); "
@@ -706,14 +743,16 @@ static void add_header(String &s, const String &title)
             "-moz-appearance: none; "
             "width: 18px; "
             "height: 18px; "
+            "min-width: 18px; "
+            "min-height: 18px; "
             "border: 2px solid var(--divider-color); "
             "border-radius: 4px; "
-            "margin: 0 6px 0 0; "
+            "margin: 0 8px 0 0; "
             "cursor: pointer; "
             "position: relative; "
             "transition: all 0.2s; "
-            "vertical-align: middle; "
             "background-color: var(--secondary-background-color); "
+            "flex-shrink: 0; "
         "}"
         "input[type='checkbox']:hover { "
             "border-color: var(--primary-color); "
@@ -744,11 +783,23 @@ static void add_header(String &s, const String &title)
         "}"
         ".radio-item { "
             "display: flex; "
-            "align-items: center; "
+            "flex-direction: column; "
             "padding: 6px; "
             "border-radius: 4px; "
             "cursor: pointer; "
             "transition: background-color 0.2s; "
+        "}"
+        ".radio-item label { "
+            "display: flex; "
+            "align-items: center; "
+            "cursor: pointer; "
+            "margin: 0; "
+        "}"
+        ".option-description { "
+            "margin: 4px 0 0 26px; "
+            "color: var(--secondary-text-color); "
+            "font-size: 11px; "
+            "line-height: 1.4; "
         "}"
         ".radio-item:hover { "
             "background-color: rgba(3, 169, 244, 0.08); "
@@ -1043,6 +1094,7 @@ static bool config_changed = false;
 
 void handle_config() {
     static unsigned long token = millis();
+    
     if (server.hasArg("id") && server.hasArg("name")) {
         String _id = server.arg("id");
         String name = server.arg("name");
@@ -1148,6 +1200,66 @@ void handle_config() {
         if (tmp != config.ha_discovery)
             config_changed = true;
         config.ha_discovery = tmp;
+    }
+    
+    // Prüfe ob IRGENDEINE Protokoll-Checkbox gesendet wurde
+    bool proto_form_submitted = false;
+    for (int i = 0; i < server.args(); i++) {
+        String argName = server.argName(i);
+        if (argName.startsWith("proto_")) {
+            proto_form_submitted = true;
+            break;
+        }
+    }
+    
+    // Wenn Protokoll-Formular abgeschickt wurde, alle Werte neu setzen
+    if (proto_form_submitted) {
+        Serial.println("Protocol form submitted, updating all protocol settings...");
+        
+        bool new_lacrosse = (server.hasArg("proto_lacrosse") && server.arg("proto_lacrosse") == "1");
+        bool new_wh1080 = (server.hasArg("proto_wh1080") && server.arg("proto_wh1080") == "1");
+        bool new_tx38it = (server.hasArg("proto_tx38it") && server.arg("proto_tx38it") == "1");
+        bool new_tx35it = (server.hasArg("proto_tx35it") && server.arg("proto_tx35it") == "1");
+        bool new_ws1600 = (server.hasArg("proto_ws1600") && server.arg("proto_ws1600") == "1");
+        bool new_wt440xh = (server.hasArg("proto_wt440xh") && server.arg("proto_wt440xh") == "1");
+        
+        // Prüfe auf Änderungen und update
+        if (new_lacrosse != config.proto_lacrosse) {
+            config.proto_lacrosse = new_lacrosse;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("LaCrosse protocol changed to: " + String(config.proto_lacrosse));
+        }
+        if (new_wh1080 != config.proto_wh1080) {
+            config.proto_wh1080 = new_wh1080;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WH1080 protocol changed to: " + String(config.proto_wh1080));
+        }
+        if (new_tx38it != config.proto_tx38it) {
+            config.proto_tx38it = new_tx38it;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("TX38IT protocol changed to: " + String(config.proto_tx38it));
+        }
+        if (new_tx35it != config.proto_tx35it) {
+            config.proto_tx35it = new_tx35it;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("TX35IT protocol changed to: " + String(config.proto_tx35it));
+        }
+        if (new_ws1600 != config.proto_ws1600) {
+            config.proto_ws1600 = new_ws1600;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WS1600 protocol changed to: " + String(config.proto_ws1600));
+        }
+        if (new_wt440xh != config.proto_wt440xh) {
+            config.proto_wt440xh = new_wt440xh;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WT440XH protocol changed to: " + String(config.proto_wt440xh));
+        }
     }
     
     String resp;
@@ -1338,7 +1450,6 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
 
-    // NEU: MQTT Topic Mode
     resp += "<div class=\"card\">";
     resp += "<h2>MQTT Topic Settings</h2>";
     resp += "<form action=\"config.html\">";
@@ -1363,6 +1474,98 @@ void handle_config() {
     resp += "</div>";
     resp += "</div>";
     resp += "<button type=\"submit\">Update MQTT Topics</button>";
+    resp += "</form>";
+    resp += "</div>";
+
+    resp += "<div class='card'>";
+    resp += "<h2>📡 Protocol Settings</h2>";
+    resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Changes require saving configuration.</p>";
+    resp += "<form action='/config.html'>";
+    
+    // LaCrosse IT+
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>LaCrosse IT+</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_lacrosse' value='1'";
+    if (config.proto_lacrosse) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable LaCrosse IT+ Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TX29-IT, TX27-IT, TX25-U, TX29DTH-IT (17.241 kbps)</div>";
+    resp += "</div>";
+    
+    // WH1080
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WH1080 Weather Station</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wh1080' value='1'";
+    if (config.proto_wh1080) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WH1080 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Weather stations with wind, rain, and temperature data (10 bytes)</div>";
+    resp += "</div>";
+    
+    // TX38IT
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>TX38IT Indoor</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tx38it' value='1'";
+    if (config.proto_tx38it) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable TX38IT Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Indoor temperature sensors (8.842 kbps)</div>";
+    resp += "</div>";
+    
+    // TX35IT
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>TX35-IT/TX35DTH-IT</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tx35it' value='1'";
+    if (config.proto_tx35it) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable TX35-IT Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TX35-IT, TX35DTH-IT sensors (9.579 kbps)</div>";
+    resp += "</div>";
+
+    // WS1600
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WS1600 Weather</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_ws1600' value='1'";
+    if (config.proto_ws1600) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WS1600 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Weather sensors (9 bytes)</div>";
+    resp += "</div>";
+    
+    // WT440XH
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WT440XH Temp/Humidity</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wt440xh' value='1'";
+    if (config.proto_wt440xh) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WT440XH Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Compact temperature/humidity sensors (4 bytes)</div>";
+    resp += "</div>";
+    
     resp += "</form>";
     resp += "</div>";
 
