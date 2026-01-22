@@ -1,25 +1,38 @@
 # LaCrosse to MQTT gateway
 
-This is a gateway to receive temperature and humidity from LaCrosse IT+ temperature sensors and publish them to a MQTT broker.
+This is a gateway to receive temperature and humidity from (868 MHz)
+ * LaCrosse IT+ temperature + humidity sensors
+ * WH1080 - Weatherstations
+ * TX38IT - indoor temperature sensors
+ * WS1600 - Weatherstations
+ * WT440XH - temperature + humidity sensors
+and publish them to a MQTT broker.
 
 The code was originally inspired by [LaCrosseITPlusReader](https://github.com/rinie/LaCrosseITPlusReader) but the original code has been completely reworked since then.
 It is designed to run on a "TTGO LORA" board which has a SX1276 RF chip and a SSD1306 OLED on board.
 
-The on-board button triggers WPS connection to the WIFI network, it should be only needed on first installation.
+At first installation just connect to the WiFi: Lacrosse2mqttAP  and connect the device to your network with the wizard.
 
 The web page is showing the received sensors with their values, the configuration page allows to specify a name / label for every sensor ID.
-The sensor ID is a 6 bit value (0-63). Because there are three different data rates for LaCrosse sensors, which can otherwise have the same ID, I decided to add 128 to the sensor ID if it comes from a sensor with the slow data rate. There are also two-channel temperature sensors which identify the second temperature channel with a "magic" humidity value. To distinguish the two channels, 64 is added to the sensor ID for the second channel. This gives a total of 256 sensor IDs.
 To clear a label for a sensor, just enter an empty label.
 
 ## MQTT publishing of values
 On the config page, you can enter the hostname / IP of your MQTT broker. The topics published are:
 
-   * `climate/<LABEL>/temp` temperate
-   * `climate/<LABEL>/humi` humidity (if available)
+   * `lacrosse/climate/<LABEL>/temp` temperate
+   * `lacrosse/climate/<LABEL>/humi` humidity (if available)
+   or
    * `lacrosse/id_<ID>/temp`, `lacrosse/id_<ID>/humi` the same but per ID. Note that the ID may change after a battery change! Labels can be rearranged after a battery change for stable naming.
    * `lacrosse/id_<ID>/state` additional flags "low_batt", "init" (for new battery state), "RSSI" (signal), "baud" (data rate) as JSON string
 
+## Reset WiFi
+Long press (5s) the button
+
+## Toggle Display
+Short press the button
+
 ## Firmware update
+Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the release page.
 The software update can be uploaded via the "Update software" link from the configuration page
 
 ## Debugging
@@ -37,6 +50,3 @@ The following libraries are needed for building (could all be installed via ardu
 
    * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
 
-## ToDo:
-
-  * try to decode more unkown data

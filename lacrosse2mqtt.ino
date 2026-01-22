@@ -50,7 +50,9 @@ unsigned long last_switch = 0;
 bool littlefs_ok;
 bool mqtt_ok;
 uint32_t auto_display_on = 0;
-
+unsigned long loop_count = 0;
+unsigned long last_cpu_check = 0;
+float cpu_usage = 0.0;
 
 Config config;
 Cache fcache[SENSOR_NUM]; /* 256 sensor slots */
@@ -530,7 +532,6 @@ void expire_cache()
     }
 }
 
-
 void update_display(LaCrosse::Frame *frame)
 {
     uint32_t now = uptime_sec();
@@ -1007,16 +1008,41 @@ void loop(void)
         Serial.println(button_time);
     }
     
+    // Kurzer Tastendruck (100-2000ms): Display Toggle
     if (button_time > 100 && button_time <= 2000) {
-        if (!config.display_on) {
+        // Toggle Display-Status
+        config.display_on = !config.display_on;
+        
+        if (config.display_on) {
+            Serial.println("Display turned ON");
+            display_set_on();
             auto_display_on = uptime_sec();
-            Serial.println("Display reactivated for 5 minutes");
         } else {
-            Serial.println("Display always on (change in webfrontend)");
+            Serial.println("Display turned OFF");
+            display_set_off();
         }
+        
         showing_starfield = false;
         last_interaction = uptime_sec();
-        update_display(NULL);
+        
+        if (config.display_on) {
+            update_display(NULL);
+        }
+    }
+    
+    // Langer Tastendruck (> 5 Sekunden): WiFi Reset
+    if (button_time > 5000) {
+        Serial.println("!!! WIFI RESET !!!");
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("WiFi Reset...");
+        display.println("Restarting...");
+        display.display();
+        
+        WiFiManager wifiManager;
+        wifiManager.resetSettings();
+        delay(1000);
+        ESP.restart();
     }
 
     receive();
@@ -1132,5 +1158,33 @@ void loop(void)
         }
     } else {
         showing_starfield = false;
+    }
+    
+    // CPU-Auslastung berechnen
+    loop_count++;
+    
+    if (millis() - last_cpu_check > 1000) {
+        // ESP32-spezifisch: Schätzung basierend auf Loops pro Sekunde
+        static unsigned long last_millis = 0;
+        unsigned long current = millis();
+        unsigned long loops_per_sec = loop_count * 1000 / (current - last_millis + 1);
+        
+        // Typischer ESP32 schafft ~100.000 leere Loops/Sekunde
+        // Bei normaler Arbeitslast: 1.000 - 10.000 Loops/Sekunde
+        if (loops_per_sec > 50000) {
+            cpu_usage = 5.0;  // Sehr idle
+        } else if (loops_per_sec > 10000) {
+            cpu_usage = 20.0; // Leicht beschäftigt
+        } else if (loops_per_sec > 5000) {
+            cpu_usage = 40.0; // Mäßig beschäftigt
+        } else if (loops_per_sec > 1000) {
+            cpu_usage = 70.0; // Stark beschäftigt
+        } else {
+            cpu_usage = 95.0; // Überlastet
+        }
+        
+        last_millis = current;
+        loop_count = 0;
+        last_cpu_check = millis();
     }
 }
