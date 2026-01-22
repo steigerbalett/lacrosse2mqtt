@@ -31,6 +31,9 @@ Long press (5s) the button
 ## Toggle Display
 Short press the button
 
+## Screensaver
+Fancy starfield animation can be shown on the display (~15% CPU usage on top)
+
 ## Firmware update
 Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the release page.
 The software update can be uploaded via the "Update software" link from the configuration page

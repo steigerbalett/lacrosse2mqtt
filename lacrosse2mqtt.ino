@@ -16,54 +16,46 @@
  * with this program; if not, got to [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/)
  */
 
-
 #include <LittleFS.h>
 #include <SPI.h>
 #include <PubSubClient.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <WiFiManager.h>
-#include "wifi_functions.h"
 #include "webfrontend.h"
 #include "globals.h"
 #include "lacrosse.h"
 #include "SX127x.h"
-#include "lacrosse.h"
-#include "wh1080.h"
-#include "tx38it.h"
-#include "tx35it.h"
-#include "ws1600.h"
-#include "wt440xh.h"
+#include <WiFiManager.h>
 
 #define FORMAT_LITTLEFS_IF_FAILED false
-
-/* if display is default to off, keep it on for this many seconds after power on
- * or a wifi change event */
 #define DISPLAY_TIMEOUT 300
 
-const int interval = 20;   /* toggle interval in seconds */
-const int freq = 868290;   /* frequency in kHz, 868300 did not receive all sensors... */
+const int interval = 20;
+const int freq = 868290;
 
 unsigned long last_reconnect;
 unsigned long last_switch = 0;
 bool littlefs_ok;
 bool mqtt_ok;
 uint32_t auto_display_on = 0;
+
+// WiFi status tracking (replaces wifi_functions.cpp)
+static wl_status_t last_wifi_status = WL_IDLE_STATUS;
+
+// CPU usage monitoring (needed by webfrontend)
 unsigned long loop_count = 0;
 unsigned long last_cpu_check = 0;
 float cpu_usage = 0.0;
 
 Config config;
-Cache fcache[SENSOR_NUM]; /* 256 sensor slots */
+Cache fcache[SENSOR_NUM];
 String id2name[SENSOR_NUM];
 uint8_t hass_cfg[SENSOR_NUM];
-
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
-
 
 #define STAR_COUNT 50
 struct Star {
@@ -71,28 +63,25 @@ struct Star {
 };
 Star stars[STAR_COUNT];
 
-
 SX127x SX(LORA_CS, LORA_RST);
 
-
 String wifi_disp;
-bool showing_starfield = false;  // NEU: Global für receive() und loop()
+bool showing_starfield = false;
 
+unsigned long last_display_update = 0;
+#define DISPLAY_UPDATE_INTERVAL 30
 
 void display_set_on() {
     display.ssd1306_command(SSD1306_DISPLAYON);
 }
 
-
 void display_set_off() {
     display.ssd1306_command(SSD1306_DISPLAYOFF);
 }
 
-
 void reset_display_timeout() {
     auto_display_on = uptime_sec();
 }
-
 
 void init_starfield() {
     for (int i = 0; i < STAR_COUNT; i++) {
@@ -102,12 +91,11 @@ void init_starfield() {
     }
 }
 
-
 void draw_starfield() {
     display.clearDisplay();
     
     for (int i = 0; i < STAR_COUNT; i++) {
-        stars[i].z -= 0.5;
+        stars[i].z -= 1.0;
         
         if (stars[i].z <= 0) {
             stars[i].x = random(-64, 64);
@@ -129,17 +117,14 @@ void draw_starfield() {
                 }
             }
         }
-    }
-    
+    }    
     display.display();
 }
-
 
 #define ESP_MANUFACTURER  "ESPRESSIF"
 #define ESP_MODEL_NUMBER  "ESP32"
 #define ESP_MODEL_NAME    "ESPRESSIF IOT"
 #define ESP_DEVICE_NAME   "ESP STATION"
-
 
 WiFiClient client;
 PubSubClient mqtt_client(client);
@@ -149,13 +134,10 @@ const String pub_base = "lacrosse/id/";
 const String hass_base = "homeassistant/sensor/";
 bool mqtt_server_set = false;
 
-
 void setup_mqtt_with_will()
 {
     String statusTopic = pub_base + "status";
     
-    // Set Last Will and Testament
-    // Wenn die Verbindung abbricht, wird automatisch "offline" publiziert
     if (mqtt_server_set) {
         const char *user = NULL;
         const char *pass = NULL;
@@ -164,7 +146,6 @@ void setup_mqtt_with_will()
             pass = config.mqtt_pass.c_str();
         }
         
-        // Connect mit Last Will
         if (mqtt_client.connect(mqtt_id.c_str(), user, pass, 
                                 statusTopic.c_str(), 0, true, "offline")) {
             Serial.println("MQTT Connected with LWT");
@@ -180,18 +161,12 @@ void check_repeatedjobs()
 {
     unsigned long now = millis();
     if (now - last_switch > interval * 1000) {
-        SX.NextDataRate();  // Wechselt automatisch nur durch aktive Raten
+        SX.NextDataRate();
         last_switch = now;
     }
     if (config.changed) {
         Serial.println("MQTT config changed. Dis- and reconnecting...");
         config.changed = false;
-
-        bool use_17241 = config.proto_lacrosse;
-        bool use_9579 = config.proto_tx35it;
-        bool use_8842 = config.proto_tx38it;
-        SX.SetActiveDataRates(use_17241, use_9579, use_8842);
-        SX.NextDataRate(0);
         if (mqtt_ok) {
             String statusTopic = pub_base + "status";
             mqtt_client.publish(statusTopic.c_str(), "offline", true);
@@ -207,7 +182,6 @@ void check_repeatedjobs()
         Serial.print("MQTT SERVER: "); Serial.println(config.mqtt_server);
         Serial.print("MQTT PORT:   "); Serial.println(config.mqtt_port);
         
-        // NEU: Home Assistant Discovery Cache zurücksetzen bei Config-Änderung
         for (int i = 0; i < SENSOR_NUM; i++)
             hass_cfg[i] = 0;
         
@@ -260,38 +234,27 @@ void pub_hass_config(int what, byte ID, byte channel)
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
     String channelSuffix = (channel == 2) ? "_ch2" : "";
     
-    // NEU: Device ID und Topics basierend auf mqtt_use_names
     String deviceId;
     String uniqueId;
     String configTopic;
     String stateTopic;
     
     if (config.mqtt_use_names && id2name[ID].length() > 0) {
-        // Namen-Modus: Verwende Sensor-Namen für alles
         String sensorIdentifier = id2name[ID];
         if (channel == 2) {
             sensorIdentifier += "_Ch2";
         }
         
-        // Device ID basiert auf Namen
         deviceId = mqtt_id + "_" + sensorIdentifier;
         uniqueId = deviceId + "_" + value[what];
-        
-        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_Wohnzimmer/temp/config
         configTopic = hass_base + deviceId + "/" + value[what] + "/config";
-        
-        // State Topic: climate/Wohnzimmer/temp
         stateTopic = pretty_base + sensorIdentifier + "/" + value[what];
         
     } else {
-        // ID-Modus: Verwende ID für alles (bisheriges Verhalten)
         deviceId = mqtt_id + "_" + String(ID);
         uniqueId = deviceId + channelSuffix + "_" + value[what];
-        
-        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_30/temp/config (oder temp_ch2/config)
         configTopic = hass_base + deviceId + "/" + value[what] + channelSuffix + "/config";
         
-        // State Topic: lacrosse/id/30/temp (oder lacrosse/id/30/ch2/temp)
         String idStr = String(ID);
         if (channel == 2)
             idStr += "/ch2";
@@ -308,7 +271,7 @@ void pub_hass_config(int what, byte ID, byte channel)
             "},"
             "\"origin\":{"
                 "\"name\":\"LaCrosse2MQTT\","
-                "\"url\":\"https://github.com/seyd/lacrosse2mqtt\","
+                "\"url\":\"https://github.com/steigerbalett/lacrosse2mqtt\","
                 "\"sw_version\":\"" + String(LACROSSE2MQTT_VERSION) + "\""
             "},"
             "\"availability\":{"
@@ -325,10 +288,6 @@ void pub_hass_config(int what, byte ID, byte channel)
             "\"enabled_by_default\":true"
         "}";
 
-    Serial.println("HA Discovery: " + configTopic);
-    Serial.println("State Topic: " + stateTopic);
-    Serial.println("Msg length: " + String(msg.length()));
-    
     mqtt_client.beginPublish(configTopic.c_str(), msg.length(), true);
     mqtt_client.print(msg);
     mqtt_client.endPublish();
@@ -341,33 +300,22 @@ void pub_hass_battery_config(byte ID)
     
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
     
-    // NEU: Device ID und Topics basierend auf mqtt_use_names
     String deviceId;
     String uniqueId;
     String configTopic;
     String stateTopic;
     
     if (config.mqtt_use_names && id2name[ID].length() > 0) {
-        // Namen-Modus
         String sensorIdentifier = id2name[ID];
         deviceId = mqtt_id + "_" + sensorIdentifier;
         uniqueId = deviceId + "_battery";
-        
-        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_Wohnzimmer/battery/config
         configTopic = hass_base + deviceId + "/battery/config";
-        
-        // State Topic: climate/Wohnzimmer/battery
         stateTopic = pretty_base + sensorIdentifier + "/battery";
         
     } else {
-        // ID-Modus
         deviceId = mqtt_id + "_" + String(ID);
         uniqueId = deviceId + "_battery";
-        
-        // Config Topic: homeassistant/sensor/lacrosse2mqtt_XXXXXX_30/battery/config
         configTopic = hass_base + deviceId + "/battery/config";
-        
-        // State Topic: lacrosse/id/30/battery
         stateTopic = pub_base + String(ID) + "/battery";
     }
     
@@ -389,157 +337,30 @@ void pub_hass_battery_config(byte ID)
     mqtt_client.endPublish();
 }
 
-void publishToMQTT_WH1080(WH1080::Frame *f) {
-    String mqttBaseTopic;
-    String sensorIdentifier;
-    
-    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
-        sensorIdentifier = id2name[f->ID];
-        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-    } else {
-        sensorIdentifier = String(f->ID, DEC);
-        mqttBaseTopic = pub_base + sensorIdentifier + "/";
-    }
-    
-    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
-    mqtt_client.publish((mqttBaseTopic + "rain").c_str(), String(f->rain, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "wind_speed").c_str(), String(f->wind_speed, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "wind_gust").c_str(), String(f->wind_gust, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "wind_dir").c_str(), WH1080::GetWindDirection(f->wind_bearing));
-    
-    String state = "{"
-        "\"RSSI\": " + String(f->rssi, DEC) +
-        ", \"type\": \"WH1080\"" +
-        ", \"station_id\": " + String(f->station_id) +
-        "}";
-    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-}
-
-void publishToMQTT_TX38(TX38IT::Frame *f) {
-    String mqttBaseTopic;
-    String sensorIdentifier;
-    
-    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
-        sensorIdentifier = id2name[f->ID];
-        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-    } else {
-        sensorIdentifier = String(f->ID, DEC);
-        mqttBaseTopic = pub_base + sensorIdentifier + "/";
-    }
-    
-    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
-    
-    if (f->humi > 0 && f->humi <= 100) {
-        mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
-    }
-    
-    String state = "{"
-        "\"low_batt\": " + String(f->batlo?"true":"false") +
-        ", \"init\": " + String(f->init?"true":"false") +
-        ", \"RSSI\": " + String(f->rssi, DEC) +
-        ", \"type\": \"TX38IT\"" +
-        "}";
-    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-}
-
-void publishToMQTT_TX35(TX35IT::Frame *f) {
-    String mqttBaseTopic;
-    String sensorIdentifier;
-    
-    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
-        sensorIdentifier = id2name[f->ID];
-        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-    } else {
-        sensorIdentifier = String(f->ID, DEC);
-        mqttBaseTopic = pub_base + sensorIdentifier + "/";
-    }
-    
-    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
-    
-    if (f->humi > 0 && f->humi <= 100) {
-        mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
-    }
-    
-    String state = "{"
-        "\"low_batt\": " + String(f->batlo?"true":"false") +
-        ", \"init\": " + String(f->init?"true":"false") +
-        ", \"RSSI\": " + String(f->rssi, DEC) +
-        ", \"type\": \"TX35-IT\"" +
-        "}";
-    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-}
-
-void publishToMQTT_WS1600(WS1600::Frame *f) {
-    String mqttBaseTopic;
-    String sensorIdentifier;
-    
-    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
-        sensorIdentifier = id2name[f->ID];
-        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-    } else {
-        sensorIdentifier = String(f->ID, DEC);
-        mqttBaseTopic = pub_base + sensorIdentifier + "/";
-    }
-    
-    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
-    mqtt_client.publish((mqttBaseTopic + "rain").c_str(), String(f->rain, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "wind_speed").c_str(), String(f->wind_speed, 1).c_str());
-    
-    String state = "{"
-        "\"low_batt\": " + String(f->batlo?"true":"false") +
-        ", \"RSSI\": " + String(f->rssi, DEC) +
-        ", \"type\": \"WS1600\"" +
-        ", \"channel\": " + String(f->channel) +
-        "}";
-    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-}
-
-void publishToMQTT_WT440(WT440XH::Frame *f) {
-    String mqttBaseTopic;
-    String sensorIdentifier;
-    
-    if (config.mqtt_use_names && id2name[f->ID].length() > 0) {
-        sensorIdentifier = id2name[f->ID];
-        mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-    } else {
-        sensorIdentifier = String(f->ID, DEC);
-        mqttBaseTopic = pub_base + sensorIdentifier + "/";
-    }
-    
-    mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(f->temp, 1).c_str());
-    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(f->humi, DEC).c_str());
-    
-    String state = "{"
-        "\"low_batt\": " + String(f->batlo?"true":"false") +
-        ", \"RSSI\": " + String(f->rssi, DEC) +
-        ", \"type\": \"WT440XH\"" +
-        ", \"channel\": " + String(f->channel) +
-        "}";
-    mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-}
-
 void expire_cache()
 {
     unsigned long now = millis();
     for (int i = 0; i < SENSOR_NUM; i++) {
         if (fcache[i].timestamp > 0 && (now - fcache[i].timestamp) > 300000) {
             memset(&fcache[i], 0, sizeof(struct Cache));
-            Serial.print("expired ID ");
-            Serial.println(i);
         }
     }
 }
 
 void update_display(LaCrosse::Frame *frame)
 {
-    uint32_t now = uptime_sec();
+    unsigned long now = millis();
+    if (now - last_display_update < DISPLAY_UPDATE_INTERVAL) {
+        return;
+    }
+    last_display_update = now;
+    
+    uint32_t uptime = uptime_sec();
     
     if (config.display_on) {
         display.ssd1306_command(SSD1306_DISPLAYON);
     } else {
-        if (now < auto_display_on + DISPLAY_TIMEOUT) {
+        if (uptime < auto_display_on + DISPLAY_TIMEOUT) {
             display.ssd1306_command(SSD1306_DISPLAYON);
         } else {
             display.ssd1306_command(SSD1306_DISPLAYOFF);
@@ -547,7 +368,7 @@ void update_display(LaCrosse::Frame *frame)
         }
     }
     
-    bool show_wifi = (uptime_sec() % 70) < 10;
+    bool show_wifi = (uptime % 70) < 10;
     
     display.clearDisplay();
     display.setTextSize(1);
@@ -563,7 +384,6 @@ void update_display(LaCrosse::Frame *frame)
         display.println("MQTT: " + String(mqtt_ok ? "OK" : "---"));
         display.display();
     } else {
-        // Finde neuesten aktiven Sensor
         byte newestID = 0;
         unsigned long newestTime = 0;
         
@@ -574,15 +394,10 @@ void update_display(LaCrosse::Frame *frame)
             }
         }
         
-        // Zeige Sensor an
         if (newestTime > 0) {
-            // Bestimme Base-ID (für Namen)
             byte baseID = newestID;
-            
-            // Sensor-Name
             String displayName = id2name[baseID].length() > 0 ? id2name[baseID] : ("ID: " + String(baseID));
             
-            // Kanal-Info anhängen wenn Kanal 2
             if (fcache[newestID].channel == 2) {
                 displayName += " Ch2";
             }
@@ -590,23 +405,19 @@ void update_display(LaCrosse::Frame *frame)
             display.println(displayName);
             display.println("----------------");
             
-            // Temperatur
             char tempBuf[24];
             snprintf(tempBuf, sizeof(tempBuf), "Temp: %.1fC", fcache[newestID].temp);
             display.println(tempBuf);
             
-            // Luftfeuchtigkeit (nur wenn vorhanden)
             if (fcache[newestID].humi > 0 && fcache[newestID].humi <= 100) {
                 snprintf(tempBuf, sizeof(tempBuf), "Humidity: %d%%", fcache[newestID].humi);
                 display.println(tempBuf);
             }
             
-            // Batterie-Status
             if (fcache[newestID].batlo) {
                 display.println("BAT: WEAK!");
             }
             
-            // RAW Daten
             String rawHex = "RAW: ";
             for (int i = 0; i < FRAME_LENGTH; i++) {
                 if (fcache[newestID].data[i] < 16) rawHex += "0";
@@ -649,231 +460,107 @@ void receive()
         Serial.println(rate);
     }
 
-    bool frame_valid = false;
+    LaCrosse::Frame frame;
+    frame.rate = rate;
+    frame.rssi = rssi;
     
-    // 1. Versuche LaCrosse IT+ (5 Bytes, 17241 bps)
-    if (payLoadSize == FRAME_LENGTH && config.proto_lacrosse) {
-        LaCrosse::Frame lacrosse_frame;
-        lacrosse_frame.rate = rate;
-        lacrosse_frame.rssi = rssi;
+    bool frame_valid = LaCrosse::TryHandleData(payload, &frame);
+    add_debug_log(payload, rssi, rate, frame_valid);
+    
+    if (frame_valid) {
+        byte ID = frame.ID;
+        byte channel = frame.channel;
         
-        if (LaCrosse::TryHandleData(payload, &lacrosse_frame)) {
-            frame_valid = true;
-            add_debug_log(payload, rssi, rate, frame_valid);
+        const char* sensorType = LaCrosse::GetSensorType(&frame);
+        
+        int cacheIndex = GetCacheIndex(ID, channel);
+        
+        if (cacheIndex >= SENSOR_NUM) {
+            digitalWrite(LED_BUILTIN, LOW);
+            return;
+        }
+
+        LaCrosse::Frame oldframe;
+        if (fcache[cacheIndex].timestamp > 0) {
+            LaCrosse::TryHandleData(fcache[cacheIndex].data, &oldframe);
+        } else {
+            oldframe.valid = false;
+        }
+        
+        fcache[cacheIndex].ID = frame.ID;
+        fcache[cacheIndex].rate = frame.rate;
+        fcache[cacheIndex].rssi = rssi;
+        fcache[cacheIndex].timestamp = millis();
+        memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
+        fcache[cacheIndex].temp = frame.temp;
+        fcache[cacheIndex].humi = frame.humi;
+        fcache[cacheIndex].batlo = frame.batlo;
+        fcache[cacheIndex].init = frame.init;
+        fcache[cacheIndex].valid = frame.valid;
+        fcache[cacheIndex].channel = frame.channel;
+        
+        strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
+        fcache[cacheIndex].sensorType[15] = '\0';
+        
+        LaCrosse::DisplayFrame(payload, &frame);
+        
+        String mqttBaseTopic;
+        String sensorIdentifier;
+        
+        if (config.mqtt_use_names && id2name[ID].length() > 0) {
+            sensorIdentifier = id2name[ID];
+            if (channel == 2) {
+                sensorIdentifier += "_Ch2";
+            }
+            mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+        } else {
+            sensorIdentifier = String(ID, DEC);
+            if (channel == 2)
+                sensorIdentifier += "/ch2";
+            mqttBaseTopic = pub_base + sensorIdentifier + "/";
+        }
+        
+        mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(frame.temp, 1).c_str());
+        
+        if (frame.humi > 0 && frame.humi <= 100) {
+            mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(frame.humi, DEC).c_str());
+        }
+        
+        String state = ""
+            "{\"low_batt\": " + String(frame.batlo?"true":"false") +
+             ", \"init\": " + String(frame.init?"true":"false") +
+             ", \"RSSI\": " + String(rssi, DEC) +
+             ", \"baud\": " + String(frame.rate / 1000.0, 3) +
+             ", \"channel\": " + String(frame.channel) +
+             ", \"type\": \"" + String(sensorType) + "\"" +
+             "}";
+        mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+        
+        if (config.ha_discovery && id2name[ID].length() > 0) {
+            if (oldframe.valid && abs(oldframe.temp - frame.temp) > 2.0) {
+                // Skip invalid
+            } else {
+                int haConfig = (channel == 2) ? 2 : 1;
+                pub_hass_config(haConfig, ID, channel);
+            }
             
-            byte ID = lacrosse_frame.ID;
-            byte channel = lacrosse_frame.channel;
-            const char* sensorType = LaCrosse::GetSensorType(&lacrosse_frame);
-            
-            int cacheIndex = GetCacheIndex(ID, channel);
-            
-            if (cacheIndex < SENSOR_NUM) {
-                LaCrosse::Frame oldframe;
-                if (fcache[cacheIndex].timestamp > 0) {
-                    LaCrosse::TryHandleData(fcache[cacheIndex].data, &oldframe);
+            if (frame.humi > 0 && frame.humi <= 100) {
+                if (oldframe.valid && abs(oldframe.humi - frame.humi) > 10) {
+                    // Skip invalid
                 } else {
-                    oldframe.valid = false;
+                    pub_hass_config(0, ID, channel);
                 }
-                
-                fcache[cacheIndex].ID = lacrosse_frame.ID;
-                fcache[cacheIndex].rate = lacrosse_frame.rate;
-                fcache[cacheIndex].rssi = rssi;
-                fcache[cacheIndex].timestamp = millis();
-                memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
-                fcache[cacheIndex].temp = lacrosse_frame.temp;
-                fcache[cacheIndex].humi = lacrosse_frame.humi;
-                fcache[cacheIndex].batlo = lacrosse_frame.batlo;
-                fcache[cacheIndex].init = lacrosse_frame.init;
-                fcache[cacheIndex].valid = lacrosse_frame.valid;
-                fcache[cacheIndex].channel = lacrosse_frame.channel;
-                
-                strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
-                fcache[cacheIndex].sensorType[15] = '\0';
-                
-                LaCrosse::DisplayFrame(payload, &lacrosse_frame);
-                
-                // MQTT Publishing
-                String mqttBaseTopic;
-                String sensorIdentifier;
-                
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
-                    sensorIdentifier = id2name[ID];
-                    if (channel == 2) {
-                        sensorIdentifier += "_Ch2";
-                    }
-                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-                } else {
-                    sensorIdentifier = String(ID, DEC);
-                    if (channel == 2)
-                        sensorIdentifier += "/ch2";
-                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
-                }
-                
-                mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(lacrosse_frame.temp, 1).c_str());
-                
-                if (lacrosse_frame.humi > 0 && lacrosse_frame.humi <= 100) {
-                    mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(lacrosse_frame.humi, DEC).c_str());
-                }
-                
-                String state = "{"
-                    "\"low_batt\": " + String(lacrosse_frame.batlo?"true":"false") +
-                     ", \"init\": " + String(lacrosse_frame.init?"true":"false") +
-                     ", \"RSSI\": " + String(rssi, DEC) +
-                     ", \"baud\": " + String(lacrosse_frame.rate / 1000.0, 3) +
-                     ", \"channel\": " + String(lacrosse_frame.channel) +
-                     ", \"type\": \"" + String(sensorType) + "\"" +
-                     "}";
-                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
-                
-                if (config.ha_discovery && id2name[ID].length() > 0) {
-                    if (oldframe.valid && abs(oldframe.temp - lacrosse_frame.temp) > 2.0) {
-                        Serial.println(String("skipping invalid temp diff: ") + String(oldframe.temp - lacrosse_frame.temp, 1));
-                    } else {
-                        int haConfig = (channel == 2) ? 2 : 1;
-                        pub_hass_config(haConfig, ID, channel);
-                    }
-                    
-                    if (lacrosse_frame.humi > 0 && lacrosse_frame.humi <= 100) {
-                        if (oldframe.valid && abs(oldframe.humi - lacrosse_frame.humi) > 10) {
-                            Serial.println(String("skipping invalid humi diff: ") + String(oldframe.humi - lacrosse_frame.humi, DEC));
-                        } else {
-                            pub_hass_config(0, ID, channel);
-                        }
-                    }
-                }
-            }
-            
-            if (!showing_starfield) {
-                LaCrosse::Frame dummy_frame;
-                update_display(&dummy_frame);
-            }
-            
-            SX.EnableReceiver(true);
-            digitalWrite(LED_BUILTIN, LOW);
-            return;
-        }
-        
-        // 2. Versuche TX38IT (5 Bytes, 8842 bps)
-        if (config.proto_tx38it && rate == 8842) {
-            TX38IT::Frame tx38_frame;
-            tx38_frame.rssi = rssi;
-            tx38_frame.rate = rate;
-            
-            if (TX38IT::TryHandleData(payload, &tx38_frame)) {
-                frame_valid = true;
-                add_debug_log(payload, rssi, rate, frame_valid);
-                TX38IT::DisplayFrame(payload, &tx38_frame);
-                publishToMQTT_TX38(&tx38_frame);
-                
-                if (!showing_starfield) {
-                    LaCrosse::Frame dummy_frame;
-                    update_display(&dummy_frame);
-                }
-                
-                SX.EnableReceiver(true);
-                digitalWrite(LED_BUILTIN, LOW);
-                return;
             }
         }
-        
-        // 3. Versuche TX35IT (5 Bytes, 9579 bps)
-        if (config.proto_tx35it && rate == 9579) {
-            TX35IT::Frame tx35_frame;
-            tx35_frame.rssi = rssi;
-            tx35_frame.rate = rate;
-            
-            if (TX35IT::TryHandleData(payload, &tx35_frame)) {
-                frame_valid = true;
-                add_debug_log(payload, rssi, rate, frame_valid);
-                TX35IT::DisplayFrame(payload, &tx35_frame);
-                publishToMQTT_TX35(&tx35_frame);
-                
-                if (!showing_starfield) {
-                    LaCrosse::Frame dummy_frame;
-                    update_display(&dummy_frame);
-                }
-                
-                SX.EnableReceiver(true);
-                digitalWrite(LED_BUILTIN, LOW);
-                return;
-            }
-        }
+
+    } else {
+        static unsigned long last;
+        LaCrosse::DisplayRaw(last, "Unknown", payload, payLoadSize, rssi, rate);
     }
-    
-    // 4. Versuche WH1080 (10 Bytes)
-    if (payLoadSize == 10 && config.proto_wh1080) {
-        WH1080::Frame wh1080_frame;
-        wh1080_frame.rssi = rssi;
-        wh1080_frame.rate = rate;
-        
-        if (WH1080::TryHandleData(payload, payLoadSize, &wh1080_frame)) {
-            frame_valid = true;
-            add_debug_log(payload, rssi, rate, frame_valid);
-            WH1080::DisplayFrame(payload, payLoadSize, &wh1080_frame);
-            publishToMQTT_WH1080(&wh1080_frame);
-            
-            if (!showing_starfield) {
-                LaCrosse::Frame dummy_frame;
-                update_display(&dummy_frame);
-            }
-            
-            SX.EnableReceiver(true);
-            digitalWrite(LED_BUILTIN, LOW);
-            return;
-        }
+
+    if (!showing_starfield) {
+        update_display(&frame);
     }
-    
-    // 5. Versuche WS1600 (9 Bytes)
-    if (payLoadSize == 9 && config.proto_ws1600) {
-        WS1600::Frame ws1600_frame;
-        ws1600_frame.rssi = rssi;
-        ws1600_frame.rate = rate;
-        
-        if (WS1600::TryHandleData(payload, payLoadSize, &ws1600_frame)) {
-            frame_valid = true;
-            add_debug_log(payload, rssi, rate, frame_valid);
-            WS1600::DisplayFrame(payload, payLoadSize, &ws1600_frame);
-            publishToMQTT_WS1600(&ws1600_frame);
-            
-            if (!showing_starfield) {
-                LaCrosse::Frame dummy_frame;
-                update_display(&dummy_frame);
-            }
-            
-            SX.EnableReceiver(true);
-            digitalWrite(LED_BUILTIN, LOW);
-            return;
-        }
-    }
-    
-    // 6. Versuche WT440XH (4 Bytes)
-    if (payLoadSize == 4 && config.proto_wt440xh) {
-        WT440XH::Frame wt440_frame;
-        wt440_frame.rssi = rssi;
-        wt440_frame.rate = rate;
-        
-        if (WT440XH::TryHandleData(payload, &wt440_frame)) {
-            frame_valid = true;
-            add_debug_log(payload, rssi, rate, frame_valid);
-            WT440XH::DisplayFrame(payload, &wt440_frame);
-            publishToMQTT_WT440(&wt440_frame);
-            
-            if (!showing_starfield) {
-                LaCrosse::Frame dummy_frame;
-                update_display(&dummy_frame);
-            }
-            
-            SX.EnableReceiver(true);
-            digitalWrite(LED_BUILTIN, LOW);
-            return;
-        }
-    }
-    
-    // Unbekanntes Protokoll
-    static unsigned long last;
-    LaCrosse::DisplayRaw(last, "Unknown", payload, payLoadSize, rssi, rate);
-    Serial.println();
-    add_debug_log(payload, rssi, rate, false);
     
     SX.EnableReceiver(true);
     digitalWrite(LED_BUILTIN, LOW);
@@ -887,7 +574,6 @@ void setup(void)
     config.mqtt_port = 1883;
     Serial.begin(115200);
 
-
     WiFiManager wifiManager;
     if (!wifiManager.autoConnect("Lacrosse2mqttAP")) {
       Serial.println("Failed to connect and hit timeout");
@@ -895,24 +581,20 @@ void setup(void)
       delay(1000);
     }
 
-
     Serial.println("Connected to WiFi!");
     Serial.print("Verbundenes WLAN: ");
     Serial.println(WiFi.SSID());
     Serial.print("IP-Adresse: ");
     Serial.println(WiFi.localIP());
 
-
     littlefs_ok = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
     if (!littlefs_ok)
         Serial.println("LittleFS Mount Failed");
     setup_web();
 
-
     if (config.debug_mode) {
         Serial.println("Debug Mode ENABLED");
     }
-
 
     pinMode(KEY_BUILTIN, INPUT);
     pinMode(LED_BUILTIN, OUTPUT);
@@ -927,21 +609,17 @@ void setup(void)
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
-
     delay(1000);
-
 
     Serial.println("TTGO LORA lacrosse2mqtt converter");
     Serial.println(mqtt_id);
     
-    // Starfield-Animation beim Booten (10 Sekunden)
     init_starfield();
     unsigned long boot_animation_start = millis();
-    while (millis() - boot_animation_start < 5000) {
+    while (millis() - boot_animation_start < 3000) {
         draw_starfield();
-        delay(50);
+        delay(100);
     }
-
 
     display.clearDisplay();
     display.setCursor(0, 0);
@@ -950,9 +628,7 @@ void setup(void)
     display.display();
     delay(2000);
 
-
     last_switch = millis();
-
 
     if (!SX.init()) {
         Serial.println("** SX127x init failed! **");
@@ -962,36 +638,53 @@ void setup(void)
             delay(1000);
     }
     SX.SetupForLaCrosse();
-    // Konfiguriere aktive Datenraten basierend auf Protokollen
-    bool use_17241 = config.proto_lacrosse;
-    bool use_9579 = config.proto_tx35it;
-    bool use_8842 = config.proto_tx38it;
-    
-    SX.SetActiveDataRates(use_17241, use_9579, use_8842);
     SX.SetFrequency(freq);
-    SX.NextDataRate(0);  // Starte mit erster Rate
+    SX.NextDataRate(0);
     SX.EnableReceiver(true);
-
 }
-
 
 uint32_t check_button()
 {
     static uint32_t low_at = 0;
     static bool pressed = false;
+    static uint32_t last_check = 0;
+    
+    uint32_t now = millis();
+    if (now - last_check < 50) {
+        return 0;
+    }
+    last_check = now;
+    
     if (digitalRead(KEY_BUILTIN) == LOW) {
         if (! pressed)
-            low_at = millis();
+            low_at = now;
         pressed = true;
         return 0;
     }
     if (! pressed)
         return 0;
     pressed = false;
-    return millis() - low_at;
+    return now - low_at;
 }
 
-static int last_state = -1;
+// NEW: Simple WiFi status check - replaces wifi_functions.cpp
+void check_wifi_status()
+{
+    wl_status_t current_status = WiFi.status();
+    if (current_status != last_wifi_status) {
+        Serial.printf("WiFi status changed: %d -> %d\n", last_wifi_status, current_status);
+        
+        if (current_status == WL_CONNECTED) {
+            Serial.println("WiFi: Connected");
+            auto_display_on = uptime_sec();
+        } else if (last_wifi_status == WL_CONNECTED) {
+            Serial.println("WiFi: Disconnected");
+            auto_display_on = uptime_sec();
+        }
+        
+        last_wifi_status = current_status;
+    }
+}
 
 void loop(void)
 {
@@ -1000,65 +693,26 @@ void loop(void)
     static bool interaction_initialized = false;
     static uint32_t last_wifi_display = 0;
     
+    delay(10);
+    
     handle_client();
 
     uint32_t button_time = check_button();
-    if (button_time > 0) {
-        Serial.print("button_time: ");
-        Serial.println(button_time);
-    }
-    
-    // Kurzer Tastendruck (100-2000ms): Display Toggle
     if (button_time > 100 && button_time <= 2000) {
-        // Toggle Display-Status
-        config.display_on = !config.display_on;
-        
-        if (config.display_on) {
-            Serial.println("Display turned ON");
-            display_set_on();
+        if (!config.display_on) {
             auto_display_on = uptime_sec();
-        } else {
-            Serial.println("Display turned OFF");
-            display_set_off();
         }
-        
         showing_starfield = false;
         last_interaction = uptime_sec();
-        
-        if (config.display_on) {
-            update_display(NULL);
-        }
-    }
-    
-    // Langer Tastendruck (> 5 Sekunden): WiFi Reset
-    if (button_time > 5000) {
-        Serial.println("!!! WIFI RESET !!!");
-        display.clearDisplay();
-        display.setCursor(0, 0);
-        display.println("WiFi Reset...");
-        display.println("Restarting...");
-        display.display();
-        
-        WiFiManager wifiManager;
-        wifiManager.resetSettings();
-        delay(1000);
-        ESP.restart();
+        update_display(NULL);
     }
 
     receive();
     check_repeatedjobs();
     expire_cache();
     
-    // WiFi-Zustandsänderung = Interaktion
-    if (last_state != wifi_state) {
-        last_state = wifi_state;
-        wifi_disp = String(_wifi_state_str[wifi_state]);
-        auto_display_on = uptime_sec();
-        showing_starfield = false;
-        last_interaction = uptime_sec();
-        last_wifi_display = uptime_sec();
-        update_display(NULL);
-    }
+    // NEW: Check WiFi status instead of using wifi_functions
+    check_wifi_status();
     
     unsigned long now = millis();
     uint32_t uptime = uptime_sec();
@@ -1069,7 +723,6 @@ void loop(void)
         interaction_initialized = true;
     }
     
-    // Prüfe auf kritische Fehler (NUR Battery-Fehler)
     bool has_critical_error = false;
     bool has_recent_data = false;
     
@@ -1077,14 +730,11 @@ void loop(void)
         if (fcache[i].timestamp > 0) {
             unsigned long age = now - fcache[i].timestamp;
             
-            // Daten sind aktuell (< 5 Minuten)
             if (age < 300000) {
                 has_recent_data = true;
                 
-                // NUR Battery-Low ist kritischer Fehler
                 if (fcache[i].batlo) {
                     has_critical_error = true;
-                    // NUR bei NEUEM Battery-Fehler Interaktion setzen
                     static bool battery_error_reported[SENSOR_NUM] = {false};
                     if (!battery_error_reported[i]) {
                         battery_error_reported[i] = true;
@@ -1099,18 +749,14 @@ void loop(void)
     bool display_should_be_on = config.display_on || (uptime < auto_display_on + DISPLAY_TIMEOUT);
     
     if (display_should_be_on) {
-        // WiFi-Anzeige-Logik abhängig von Screensaver-Modus
         bool show_wifi;
         if (config.screensaver_mode && config.display_on) {
-            // Screensaver-Modus: WiFi nur alle 5 Minuten (300 Sekunden)
             uint32_t time_since_last_wifi = uptime - last_wifi_display;
             show_wifi = (time_since_last_wifi >= 300) && (time_since_last_wifi < 310);
         } else {
-            // Normal-Modus: WiFi alle 70 Sekunden für 10 Sekunden
             show_wifi = (uptime % 70) < 10;
         }
         
-        // SCREENSAVER LOGIK
         if (config.screensaver_mode && config.display_on) {
             uint32_t idle_time = uptime - last_interaction;
             
@@ -1119,17 +765,15 @@ void loop(void)
                                           !show_wifi;
             
             if (should_show_screensaver) {
-                if ((now - last_starfield_update > 50)) {
+                if ((now - last_starfield_update > 100)) {
                     last_starfield_update = now;
                     if (!showing_starfield) {
-                        Serial.println(">>> STARTING SCREENSAVER <<<");
                         showing_starfield = true;
                     }
                     draw_starfield();
                 }
             } else {
                 if (showing_starfield) {
-                    Serial.println(">>> STOPPING SCREENSAVER <<<");
                     showing_starfield = false;
                     update_display(NULL);
                 } else if (show_wifi) {
@@ -1139,7 +783,7 @@ void loop(void)
             }
         } else {
             if (!show_wifi) {
-                if (!has_recent_data && (now - last_starfield_update > 50)) {
+                if (!has_recent_data && (now - last_starfield_update > 100)) {
                     last_starfield_update = now;
                     if (!showing_starfield) {
                         showing_starfield = true;
@@ -1160,30 +804,29 @@ void loop(void)
         showing_starfield = false;
     }
     
-    // CPU-Auslastung berechnen
+    // CPU-Auslastung berechnen - optimiert für delay(10) Loop
     loop_count++;
     
     if (millis() - last_cpu_check > 1000) {
-        // ESP32-spezifisch: Schätzung basierend auf Loops pro Sekunde
-        static unsigned long last_millis = 0;
-        unsigned long current = millis();
-        unsigned long loops_per_sec = loop_count * 1000 / (current - last_millis + 1);
+        // Bei delay(10) sind max ~90 Loops/Sekunde möglich
+        // Realistische Schwellwerte für diesen Code:
+        // - 80-90 loops/s = idle (ca. 10-20% CPU)
+        // - 50-80 loops/s = normal (ca. 20-40% CPU) 
+        // - 30-50 loops/s = beschäftigt (ca. 40-60% CPU)
+        // - < 30 loops/s = überlastet (>60% CPU)
         
-        // Typischer ESP32 schafft ~100.000 leere Loops/Sekunde
-        // Bei normaler Arbeitslast: 1.000 - 10.000 Loops/Sekunde
-        if (loops_per_sec > 50000) {
-            cpu_usage = 5.0;  // Sehr idle
-        } else if (loops_per_sec > 10000) {
-            cpu_usage = 20.0; // Leicht beschäftigt
-        } else if (loops_per_sec > 5000) {
-            cpu_usage = 40.0; // Mäßig beschäftigt
-        } else if (loops_per_sec > 1000) {
-            cpu_usage = 70.0; // Stark beschäftigt
+        if (loop_count >= 80) {
+            cpu_usage = 15.0;  // Sehr idle
+        } else if (loop_count >= 60) {
+            cpu_usage = 30.0;  // Leicht beschäftigt
+        } else if (loop_count >= 40) {
+            cpu_usage = 50.0;  // Mäßig beschäftigt
+        } else if (loop_count >= 20) {
+            cpu_usage = 70.0;  // Stark beschäftigt
         } else {
-            cpu_usage = 95.0; // Überlastet
+            cpu_usage = 90.0;  // Überlastet
         }
         
-        last_millis = current;
         loop_count = 0;
         last_cpu_check = millis();
     }
