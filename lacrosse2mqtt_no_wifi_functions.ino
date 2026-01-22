@@ -32,6 +32,11 @@ uint32_t auto_display_on = 0;
 // WiFi status tracking (replaces wifi_functions.cpp)
 static wl_status_t last_wifi_status = WL_IDLE_STATUS;
 
+// CPU usage monitoring (needed by webfrontend)
+unsigned long loop_count = 0;
+unsigned long last_cpu_check = 0;
+float cpu_usage = 0.0;
+
 Config config;
 Cache fcache[SENSOR_NUM];
 String id2name[SENSOR_NUM];
@@ -779,5 +784,30 @@ void loop(void)
         }
     } else {
         showing_starfield = false;
+    }
+    
+    // CPU-Auslastung berechnen
+    loop_count++;
+    
+    if (millis() - last_cpu_check > 1000) {
+        static unsigned long last_millis = 0;
+        unsigned long current = millis();
+        unsigned long loops_per_sec = loop_count * 1000 / (current - last_millis + 1);
+        
+        if (loops_per_sec > 50000) {
+            cpu_usage = 5.0;
+        } else if (loops_per_sec > 10000) {
+            cpu_usage = 20.0;
+        } else if (loops_per_sec > 5000) {
+            cpu_usage = 40.0;
+        } else if (loops_per_sec > 1000) {
+            cpu_usage = 70.0;
+        } else {
+            cpu_usage = 95.0;
+        }
+        
+        last_millis = current;
+        loop_count = 0;
+        last_cpu_check = millis();
     }
 }
