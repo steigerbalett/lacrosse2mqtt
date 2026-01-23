@@ -53,21 +53,34 @@ static const uint8_t LED_BUILTIN = 2;
 #define HASS_CFG_TEMP2 (1 << 2)
 
 struct Cache {
-    byte data[FRAME_LENGTH];
-    uint32_t timestamp;
-    int8_t rssi;
+    unsigned long timestamp;
+    byte ID;
+    byte rate;
+    int rssi;
+    uint8_t data[FRAME_LENGTH];
     float temp;
-    int8_t humi;
-    bool batlo;
-    bool init;
+    byte humi;
+    bool batlo;        // Gilt für BEIDE Kanäle
+    bool init;         // Gilt für BEIDE Kanäle
     bool valid;
     byte channel;
-    byte ID;
-    uint16_t rate;
     char sensorType[16];
+    
+    // Kanal 2 Daten (nur Temperatur!)
+    float temp_ch2;
+    unsigned long timestamp_ch2;
+    
+    // Wetterstation Daten
+    float wind_speed;
+    int wind_direction;
+    float rain;
+    float rain_total;
+    byte wind_gust;
+    unsigned long rain_timestamp;
+    unsigned long wind_timestamp;
 };
 
-// NEU: Hilfsfunktion für Cache-Index
+// Hilfsfunktion für Cache-Index
 // ID 30 Ch1 → Index 60 (30*2 + 0)
 // ID 30 Ch2 → Index 61 (30*2 + 1)
 static inline int GetCacheIndex(byte ID, byte channel) {

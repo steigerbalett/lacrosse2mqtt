@@ -3,17 +3,6 @@
  * Bridge LaCrosse IT+ sensors to MQTT
  * (C) 2021 Stefan Seyfried
  * SPDX-License-Identifier: GPL-2.0-or-later
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, got to [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/)
  */
 
 #include <LittleFS.h>
@@ -40,10 +29,8 @@ bool littlefs_ok;
 bool mqtt_ok;
 uint32_t auto_display_on = 0;
 
-// WiFi status tracking (replaces wifi_functions.cpp)
 static wl_status_t last_wifi_status = WL_IDLE_STATUS;
 
-// CPU usage monitoring (needed by webfrontend)
 unsigned long loop_count = 0;
 unsigned long last_cpu_check = 0;
 float cpu_usage = 0.0;
@@ -120,11 +107,6 @@ void draw_starfield() {
     }    
     display.display();
 }
-
-#define ESP_MANUFACTURER  "ESPRESSIF"
-#define ESP_MODEL_NUMBER  "ESP32"
-#define ESP_MODEL_NAME    "ESPRESSIF IOT"
-#define ESP_DEVICE_NAME   "ESP STATION"
 
 WiFiClient client;
 PubSubClient mqtt_client(client);
@@ -219,7 +201,7 @@ void check_repeatedjobs()
 void pub_hass_config(int what, byte ID, byte channel)
 {
     static const String name_suffix[3] = { " Humidity", " Temperature", " Temperature Ch2" };
-    static const String value[3] = { "humi", "temp", "temp" };
+    static const String value[3] = { "humi", "temp", "temp_ch2" };
     static const String dclass[3] = { "humidity", "temperature", "temperature" };
     static const String unit[3] = { "%", "°C", "°C" };
     
@@ -232,8 +214,8 @@ void pub_hass_config(int what, byte ID, byte channel)
     hass_cfg[ID] |= configMask;
     
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
-    String channelSuffix = (channel == 2) ? "_ch2" : "";
     
+    // WICHTIG: deviceId bleibt GLEICH für beide Kanäle!
     String deviceId;
     String uniqueId;
     String configTopic;
@@ -241,24 +223,34 @@ void pub_hass_config(int what, byte ID, byte channel)
     
     if (config.mqtt_use_names && id2name[ID].length() > 0) {
         String sensorIdentifier = id2name[ID];
-        if (channel == 2) {
-            sensorIdentifier += "_Ch2";
+        
+        // Device ID OHNE Kanal-Suffix - beide Kanäle gehören zum selben Gerät
+        deviceId = mqtt_id + "_" + sensorIdentifier;
+        
+        // Unique ID und Topics MIT Kanal-Unterscheidung
+        if (channel == 2 && what == 2) {
+            uniqueId = deviceId + "_temp_ch2";
+            configTopic = hass_base + deviceId + "/temp_ch2/config";
+            stateTopic = pretty_base + sensorIdentifier + "_Ch2/temp";
+        } else {
+            uniqueId = deviceId + "_" + value[what];
+            configTopic = hass_base + deviceId + "/" + value[what] + "/config";
+            stateTopic = pretty_base + sensorIdentifier + "/" + value[what];
         }
         
-        deviceId = mqtt_id + "_" + sensorIdentifier;
-        uniqueId = deviceId + "_" + value[what];
-        configTopic = hass_base + deviceId + "/" + value[what] + "/config";
-        stateTopic = pretty_base + sensorIdentifier + "/" + value[what];
-        
     } else {
+        // Device ID OHNE Kanal-Suffix
         deviceId = mqtt_id + "_" + String(ID);
-        uniqueId = deviceId + channelSuffix + "_" + value[what];
-        configTopic = hass_base + deviceId + "/" + value[what] + channelSuffix + "/config";
         
-        String idStr = String(ID);
-        if (channel == 2)
-            idStr += "/ch2";
-        stateTopic = pub_base + idStr + "/" + value[what];
+        if (channel == 2 && what == 2) {
+            uniqueId = deviceId + "_temp_ch2";
+            configTopic = hass_base + deviceId + "/temp_ch2/config";
+            stateTopic = pub_base + String(ID) + "/ch2/temp";
+        } else {
+            uniqueId = deviceId + "_" + value[what];
+            configTopic = hass_base + deviceId + "/" + value[what] + "/config";
+            stateTopic = pub_base + String(ID) + "/" + value[what];
+        }
     }
     
     String msg = "{"
@@ -297,6 +289,12 @@ void pub_hass_battery_config(byte ID)
 {
     if (!config.ha_discovery)
         return;
+    
+    // Prüfe ob Battery Config bereits gesendet wurde
+    static byte battery_cfg_sent[SENSOR_NUM] = {0};
+    if (battery_cfg_sent[ID])
+        return;
+    battery_cfg_sent[ID] = 1;
     
     String sensorName = id2name[ID].length() > 0 ? id2name[ID] : ("LaCrosse_" + String(ID));
     
@@ -341,8 +339,20 @@ void expire_cache()
 {
     unsigned long now = millis();
     for (int i = 0; i < SENSOR_NUM; i++) {
+        // Kanal 1 Daten
         if (fcache[i].timestamp > 0 && (now - fcache[i].timestamp) > 300000) {
-            memset(&fcache[i], 0, sizeof(struct Cache));
+            fcache[i].timestamp = 0;
+            fcache[i].temp = 0;
+            fcache[i].humi = 0;
+            fcache[i].valid = false;
+            fcache[i].batlo = false;
+            fcache[i].init = false;
+        }
+        
+        // Kanal 2 Daten
+        if (fcache[i].timestamp_ch2 > 0 && (now - fcache[i].timestamp_ch2) > 300000) {
+            fcache[i].timestamp_ch2 = 0;
+            fcache[i].temp_ch2 = 0;
         }
     }
 }
@@ -473,83 +483,129 @@ void receive()
         
         const char* sensorType = LaCrosse::GetSensorType(&frame);
         
-        int cacheIndex = GetCacheIndex(ID, channel);
-        
+        // Beide Kanäle verwenden denselben Cache-Index
+        int cacheIndex = ID;
+
         if (cacheIndex >= SENSOR_NUM) {
             digitalWrite(LED_BUILTIN, LOW);
             return;
         }
 
+        // Alte Frame-Daten für Vergleich
         LaCrosse::Frame oldframe;
         if (fcache[cacheIndex].timestamp > 0) {
             LaCrosse::TryHandleData(fcache[cacheIndex].data, &oldframe);
         } else {
             oldframe.valid = false;
         }
-        
+
+        // Gemeinsame Daten (immer aktualisieren)
         fcache[cacheIndex].ID = frame.ID;
         fcache[cacheIndex].rate = frame.rate;
         fcache[cacheIndex].rssi = rssi;
-        fcache[cacheIndex].timestamp = millis();
-        memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
-        fcache[cacheIndex].temp = frame.temp;
-        fcache[cacheIndex].humi = frame.humi;
-        fcache[cacheIndex].batlo = frame.batlo;
-        fcache[cacheIndex].init = frame.init;
         fcache[cacheIndex].valid = frame.valid;
-        fcache[cacheIndex].channel = frame.channel;
-        
+        fcache[cacheIndex].batlo = frame.batlo;  // Gilt für beide Kanäle!
+        fcache[cacheIndex].init = frame.init;    // Gilt für beide Kanäle!
+        memcpy(&fcache[cacheIndex].data, payload, FRAME_LENGTH);
         strncpy(fcache[cacheIndex].sensorType, sensorType, 15);
         fcache[cacheIndex].sensorType[15] = '\0';
+
+        // Kanal-spezifische Daten
+        if (channel == 2) {
+            // Nur Temperatur für Kanal 2
+            fcache[cacheIndex].temp_ch2 = frame.temp;
+            fcache[cacheIndex].timestamp_ch2 = millis();
+        } else {
+            // Kanal 1: Temperatur und Humidity
+            fcache[cacheIndex].temp = frame.temp;
+            fcache[cacheIndex].humi = frame.humi;
+            fcache[cacheIndex].timestamp = millis();
+            fcache[cacheIndex].channel = frame.channel;
+        }
         
         LaCrosse::DisplayFrame(payload, &frame);
         
+        // MQTT Topics basierend auf Konfiguration
         String mqttBaseTopic;
         String sensorIdentifier;
-        
+        String batteryTopic;
+
         if (config.mqtt_use_names && id2name[ID].length() > 0) {
+            // Verwendung von Namen
             sensorIdentifier = id2name[ID];
+            
             if (channel == 2) {
-                sensorIdentifier += "_Ch2";
+                // Kanal 2: Separates Topic mit _Ch2 Suffix
+                mqttBaseTopic = pretty_base + sensorIdentifier + "_Ch2/";
+                // Battery Topic bleibt beim Hauptgerät (ohne _Ch2)
+                batteryTopic = pretty_base + sensorIdentifier + "/battery";
+            } else {
+                // Kanal 1: Standard Topic
+                mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                batteryTopic = mqttBaseTopic + "battery";
             }
-            mqttBaseTopic = pretty_base + sensorIdentifier + "/";
         } else {
+            // Verwendung von IDs
             sensorIdentifier = String(ID, DEC);
-            if (channel == 2)
-                sensorIdentifier += "/ch2";
-            mqttBaseTopic = pub_base + sensorIdentifier + "/";
+            
+            if (channel == 2) {
+                mqttBaseTopic = pub_base + sensorIdentifier + "/ch2/";
+                // Battery Topic beim Hauptgerät
+                batteryTopic = pub_base + sensorIdentifier + "/battery";
+            } else {
+                mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                batteryTopic = mqttBaseTopic + "battery";
+            }
         }
         
+        // Temperatur publishen (für beide Kanäle)
         mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(frame.temp, 1).c_str());
         
-        if (frame.humi > 0 && frame.humi <= 100) {
+        // Humidity nur bei Kanal 1 und wenn vorhanden
+        if (channel == 1 && frame.humi > 0 && frame.humi <= 100) {
             mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(frame.humi, DEC).c_str());
         }
         
-        String state = ""
-            "{\"low_batt\": " + String(frame.batlo?"true":"false") +
-             ", \"init\": " + String(frame.init?"true":"false") +
-             ", \"RSSI\": " + String(rssi, DEC) +
-             ", \"baud\": " + String(frame.rate / 1000.0, 3) +
-             ", \"channel\": " + String(frame.channel) +
-             ", \"type\": \"" + String(sensorType) + "\"" +
-             "}";
+        // State Information
+        String state = "{"
+            "\"low_batt\": " + String(frame.batlo ? "true" : "false") +
+            ", \"init\": " + String(frame.init ? "true" : "false") +
+            ", \"RSSI\": " + String(rssi, DEC) +
+            ", \"baud\": " + String(frame.rate / 1000.0, 3) +
+            ", \"channel\": " + String(frame.channel) +
+            ", \"type\": \"" + String(sensorType) + "\"" +
+            "}";
         mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
         
+        // Battery Status nur bei Kanal 1 publishen (gilt für beide Kanäle!)
+        if (channel == 1) {
+            int batteryPercent = frame.batlo ? 10 : 100;
+            mqtt_client.publish(batteryTopic.c_str(), String(batteryPercent).c_str());
+        }
+        
+        // Home Assistant Discovery nur wenn Name gesetzt ist
         if (config.ha_discovery && id2name[ID].length() > 0) {
+            // Alte Frame-Daten für Validierung
             if (oldframe.valid && abs(oldframe.temp - frame.temp) > 2.0) {
-                // Skip invalid
+                // Skip invalid temperature jump
             } else {
-                int haConfig = (channel == 2) ? 2 : 1;
-                pub_hass_config(haConfig, ID, channel);
+                // Temperatur Config
+                int haConfigIndex = (channel == 2) ? 2 : 1;  // 1=temp, 2=temp_ch2
+                pub_hass_config(haConfigIndex, ID, channel);
             }
             
-            if (frame.humi > 0 && frame.humi <= 100) {
+            // Humidity Config nur bei Kanal 1
+            if (channel == 1 && frame.humi > 0 && frame.humi <= 100) {
                 if (oldframe.valid && abs(oldframe.humi - frame.humi) > 10) {
-                    // Skip invalid
+                    // Skip invalid humidity jump
                 } else {
-                    pub_hass_config(0, ID, channel);
+                    pub_hass_config(0, ID, channel);  // 0=humidity
                 }
+            }
+            
+            // Battery Config nur bei Kanal 1
+            if (channel == 1) {
+                pub_hass_battery_config(ID);
             }
         }
 
@@ -637,6 +693,12 @@ void setup(void)
         while(true)
             delay(1000);
     }
+
+    bool use_17241 = config.proto_lacrosse;
+    bool use_9579 = config.proto_tx35it;
+    bool use_8842 = config.proto_tx38it;
+    SX.SetActiveDataRates(use_17241, use_9579, use_8842);
+
     SX.SetupForLaCrosse();
     SX.SetFrequency(freq);
     SX.NextDataRate(0);
@@ -667,7 +729,6 @@ uint32_t check_button()
     return now - low_at;
 }
 
-// NEW: Simple WiFi status check - replaces wifi_functions.cpp
 void check_wifi_status()
 {
     wl_status_t current_status = WiFi.status();
@@ -710,8 +771,6 @@ void loop(void)
     receive();
     check_repeatedjobs();
     expire_cache();
-    
-    // NEW: Check WiFi status instead of using wifi_functions
     check_wifi_status();
     
     unsigned long now = millis();
@@ -804,27 +863,19 @@ void loop(void)
         showing_starfield = false;
     }
     
-    // CPU-Auslastung berechnen - optimiert für delay(10) Loop
     loop_count++;
     
     if (millis() - last_cpu_check > 1000) {
-        // Bei delay(10) sind max ~90 Loops/Sekunde möglich
-        // Realistische Schwellwerte für diesen Code:
-        // - 80-90 loops/s = idle (ca. 10-20% CPU)
-        // - 50-80 loops/s = normal (ca. 20-40% CPU) 
-        // - 30-50 loops/s = beschäftigt (ca. 40-60% CPU)
-        // - < 30 loops/s = überlastet (>60% CPU)
-        
         if (loop_count >= 80) {
-            cpu_usage = 15.0;  // Sehr idle
+            cpu_usage = 15.0;
         } else if (loop_count >= 60) {
-            cpu_usage = 30.0;  // Leicht beschäftigt
+            cpu_usage = 30.0;
         } else if (loop_count >= 40) {
-            cpu_usage = 50.0;  // Mäßig beschäftigt
+            cpu_usage = 50.0;
         } else if (loop_count >= 20) {
-            cpu_usage = 70.0;  // Stark beschäftigt
+            cpu_usage = 70.0;
         } else {
-            cpu_usage = 90.0;  // Überlastet
+            cpu_usage = 90.0;
         }
         
         loop_count = 0;
