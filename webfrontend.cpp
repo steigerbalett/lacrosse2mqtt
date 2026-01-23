@@ -9,6 +9,9 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+					   
+								
+
 // Debug-Log Buffer (ringbuffer für letzte 100 Frames)
 #define DEBUG_LOG_SIZE 100
 struct DebugEntry {
@@ -34,7 +37,9 @@ void add_debug_log(uint8_t *data, int8_t rssi, int datarate, bool valid) {
 }
 
 extern uint32_t auto_display_on;
-extern Adafruit_SSD1306 display; 
+extern Adafruit_SSD1306 display;
+extern unsigned long loop_count;
+extern float cpu_usage;
 
 static WebServer server(80);
 static HTTPUpdateServer httpUpdater;
@@ -180,6 +185,7 @@ bool load_config()
         Serial.println("mqtt_server: " + config.mqtt_server);
         Serial.println("mqtt_port: " + String(config.mqtt_port));
         Serial.println("mqtt_user: " + config.mqtt_user);
+        Serial.println("mqtt_pass: " + String(config.mqtt_pass.length() > 0 ? "***" : "(not set)"));
         Serial.println("ha_discovery: " + String(config.ha_discovery));
         Serial.println("display_on: " + String(config.display_on));
         Serial.println("debug_mode: " + String(config.debug_mode));
@@ -305,7 +311,7 @@ void add_current_table(String &s, bool rawdata)
     unsigned long now = millis();
     
     s += "<h2>Current sensor data</h2>\n";
-    s += "<table>\n";
+    s += "<table id='sensor-table'>\n";
     s += "<thead><tr>";
     s += "<th>ID</th>";
     s += "<th>Ch</th>";
@@ -320,7 +326,7 @@ void add_current_table(String &s, bool rawdata)
     if (rawdata)
         s += "<th>Raw Frame Data</th>";
     s += "</tr></thead>\n";
-    s += "<tbody>\n";
+    s += "<tbody id='sensor-tbody'>\n";
 
     int sensorCount = 0;
     
@@ -416,22 +422,192 @@ void add_current_table(String &s, bool rawdata)
     if (sensorCount == 0) {
         s += "<p><em>No sensors found. Waiting for data...</em></p>\n";
     } else {
-        s += "<p><em>Total sensors: " + String(sensorCount) + "</em></p>\n";
+        s += "<p id='sensor-count'><em>Total sensors: " + String(sensorCount) + "</em></p>\n";
     }
+}
+
+// NEU: JSON-Endpoint für Sensordaten
+void handle_sensors_json() {
+    unsigned long now = millis();
+    JsonDocument doc;
+    JsonArray sensors = doc["sensors"].to<JsonArray>();
+    
+    int sensorCount = 0;
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
+            continue;
+        
+        JsonObject sensor = sensors.add<JsonObject>();
+        sensor["id"] = fcache[i].ID;
+        sensor["ch"] = fcache[i].channel;
+        sensor["type"] = String(fcache[i].sensorType);
+        sensor["temp"] = serialized(String(fcache[i].temp, 1));
+        sensor["humi"] = fcache[i].humi;
+        sensor["rssi"] = fcache[i].rssi;
+        sensor["name"] = id2name[fcache[i].ID];
+        sensor["age"] = now - fcache[i].timestamp;
+        sensor["batlo"] = fcache[i].batlo;
+        sensor["init"] = fcache[i].init;
+        
+        String rawData = "";
+        for (int j = 0; j < FRAME_LENGTH; j++) {
+            char tmp[3];
+            snprintf(tmp, 3, "%02X", fcache[i].data[j]);
+            rawData += String(tmp);
+            if (j < FRAME_LENGTH - 1)
+                rawData += " ";
+        }
+        sensor["raw"] = rawData;
+        
+        sensorCount++;
+    }
+    
+    doc["count"] = sensorCount;
+//    doc["loop_count"] = loop_count;
+    doc["uptime"] = time_string();
+    doc["mqtt_ok"] = mqtt_ok;
+    doc["wifi_ok"] = (WiFi.status() == WL_CONNECTED);
+    doc["wifi_ssid"] = WiFi.SSID();
+    doc["wifi_ip"] = WiFi.localIP().toString();
+    doc["cpu_usage"] = serialized(String(cpu_usage, 1));
+    
+    String output;
+    serializeJson(doc, output);
+    server.send(200, "application/json", output);
 }
 
 static void add_header(String &s, const String &title)
 {
     s = "<!DOCTYPE html><html><head>"
         "<meta charset='UTF-8'>"
-        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+    
+    if (title.indexOf("Gateway") > -1 || title.indexOf("Configuration") > -1) {
+        s += "<script>"
+             "let autoRefreshEnabled = true;"
+             "let refreshInterval = 5000;"
+             "let refreshTimer;"
+             
+             "function updateSensorData() {"
+"  if (!autoRefreshEnabled) return;"
+"  fetch('/sensors.json')"
+"    .then(response => response.json())"
+"    .then(data => {"
+"      const tbody = document.getElementById('sensor-tbody');"
+"      if (tbody) {"
+"        tbody.innerHTML = '';"
+"        data.sensors.forEach(sensor => {"
+"          const row = tbody.insertRow();"
+"          row.innerHTML = '<td>' + sensor.id + '</td>' +"  // ← String-Konkatenation statt Template
+"            '<td>' + sensor.ch + '</td>' +"
+"            '<td>' + sensor.type + '</td>' +"
+"            '<td>' + sensor.temp + ' °C</td>' +"
+"            '<td>' + (sensor.humi > 0 && sensor.humi <= 100 ? sensor.humi + ' %' : '-') + '</td>' +"
+"            '<td>' + sensor.rssi + '</td>' +"
+"            '<td>' + (sensor.name || '-') + '</td>' +"
+"            '<td>' + sensor.age + '</td>' +"
+"            '<td class=\"' + (sensor.batlo ? 'batt-weak' : 'batt-ok') + '\">' + (sensor.batlo ? 'weak' : 'ok') + '</td>' +"
+"            '<td class=\"' + (sensor.init ? 'init-new' : 'init-no') + '\">' + (sensor.init ? 'yes' : 'no') + '</td>' +"
+"            '<td class=\"raw-data\">0x' + sensor.raw + '</td>';"
+"        });"
+"      }"
+"      const systemStatus = document.getElementById('system-status');"
+"      if (systemStatus) {"
+"        let statusHtml = '';"
+"        if (data.mqtt_ok) {"
+"          statusHtml += '<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
+"        } else {"
+"          statusHtml += '<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
+"        }"
+"        if (data.wifi_ok) {"
+"          statusHtml += '<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
+"        } else {"
+"          statusHtml += '<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';"
+"        }"
+"        systemStatus.innerHTML = statusHtml;"
+"      }"
+"      const wifiSsid = document.getElementById('wifi-ssid');"
+"      if (wifiSsid && data.wifi_ssid) {"
+"        wifiSsid.textContent = 'SSID: ' + data.wifi_ssid;"
+"      }"
+"      const wifiIp = document.getElementById('wifi-ip');"
+"      if (wifiIp && data.wifi_ip) {"
+"        wifiIp.textContent = 'IP: ' + data.wifi_ip;"
+"      }"
+"      const uptime = document.getElementById('system-uptime');"
+"      if (uptime && data.uptime) {"
+"        uptime.textContent = 'Uptime: ' + data.uptime;"
+"      }"
+"      const cpuLoad = document.getElementById('cpu-load');"
+"      if (cpuLoad && data.cpu_usage) {"
+"        cpuLoad.textContent = 'CPU Load: ' + data.cpu_usage + '%';"
+"      }"
+"      const countElem = document.getElementById('sensor-count');"
+"      if (countElem) {"
+"        if (data.count === 0) {"
+"          countElem.innerHTML = '<em>No sensors found. Waiting for data...</em>';"
+"        } else {"
+"          countElem.innerHTML = '<em>Total sensors: ' + data.count + ' | Last update: ' + new Date().toLocaleTimeString() + '</em>';"
+"        }"
+"      }"
+"      const refreshStatus = document.getElementById('refresh-status');"
+"      if (refreshStatus) {"
+"        refreshStatus.textContent = '✓ Live (updated ' + new Date().toLocaleTimeString() + ')';"
+"        refreshStatus.style.color = 'var(--success-color)';"
+"      }"
+"    })"
+"    .catch(error => {"
+"      console.error('Error:', error);"
+"      const refreshStatus = document.getElementById('refresh-status');"
+"      if (refreshStatus) {"
+"        refreshStatus.textContent = '✗ Error';"
+"        refreshStatus.style.color = 'var(--error-color)';"
+"      }"
+"    });"
+"}"
+
+             "function toggleAutoRefresh() {"
+             "  autoRefreshEnabled = !autoRefreshEnabled;"
+             "  const btn = document.getElementById('auto-refresh-btn');"
+             "  const status = document.getElementById('refresh-status');"
+             "  "
+             "  if (autoRefreshEnabled) {"
+             "    btn.textContent = '⏸️ Pause Auto-Refresh';"
+             "    btn.style.backgroundColor = 'var(--warning-color)';"
+             "    status.textContent = '⏳ Starting...';"
+             "    status.style.color = 'var(--info-color)';"
+             "    startAutoRefresh();"
+             "    updateSensorData();"
+             "  } else {"
+             "    btn.textContent = '▶️ Resume Auto-Refresh';"
+             "    btn.style.backgroundColor = 'var(--success-color)';"
+             "    status.textContent = '⏸️ Paused';"
+             "    status.style.color = 'var(--warning-color)';"
+             "    if (refreshTimer) clearInterval(refreshTimer);"
+             "  }"
+             "}"
+             
+             "function startAutoRefresh() {"
+             "  if (refreshTimer) clearInterval(refreshTimer);"
+             "  refreshTimer = setInterval(updateSensorData, refreshInterval);"
+             "}"
+             
+             "window.addEventListener('DOMContentLoaded', () => {"
+             "  startAutoRefresh();"
+             "  setTimeout(updateSensorData, 1000);"
+             "});"
+             "</script>";
+    }
+    
+    s += "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
         "<circle cx='50' cy='30' r='15' fill='%2303a9f4'/>"
         "<rect x='43' y='28' width='14' height='45' rx='7' fill='%2303a9f4'/>"
         "<circle cx='50' cy='70' r='12' fill='%23ff5252'/>"
         "<rect x='46' y='35' width='8' height='30' fill='%23ff5252'/>"
-        "</svg>\">"
-        "<style>"
+        "</svg>\">";
+
+
+    s += "<style>"
         ":root { "
             "--primary-color: #03a9f4; "
             "--accent-color: #ff9800; "
@@ -948,18 +1124,36 @@ static void add_header(String &s, const String &title)
             "h1 { font-size: 22px; } "
             ".card, form { padding: 10px; } "
             ".header-container { flex-direction: column; align-items: flex-start; gap: 8px; } "
-        "}"
-        "</style>"
-        "<title>" + title + "</title></head>"
-        "<body>"
-        "<div class='header-container'>"
-        "<h1>🌡️ " + title + "</h1>"
-        "<div class='theme-toggle' onclick='toggleTheme()'>"
-            "<span class='theme-icon' id='theme-icon'>🌙</span>"
-            "<span id='theme-text'>Dark Mode</span>"
-        "</div>"
-        "</div>"
-        "<script>"
+        "}";
+
+    s += ".refresh-control { "		  
+        "background-color: var(--card-background-color); "															  
+        "border-radius: 8px; "
+        "padding: 12px; " 
+        "margin: 12px 0; "
+        "display: flex; "
+        "align-items: center; "
+        "justify-content: space-between; "
+        "border: 1px solid var(--divider-color); "
+    "}";
+    
+    s += ".refresh-status { "
+        "font-size: 13px; "
+        "color: var(--info-color); "
+        "font-weight: 500; "
+    "}";
+    
+    s += "</style>";
+    s += "<title>" + title + "</title></head>";
+    s += "<body>";
+    s += "<div class='header-container'>";
+    s += "<h1>🌡️ " + title + "</h1>";
+    s += "<div class='theme-toggle' onclick='toggleTheme()'>";
+    s += "<span class='theme-icon' id='theme-icon'>🌙</span>";
+    s += "<span id='theme-text'>Dark Mode</span>";
+    s += "</div>";
+    s += "</div>";
+    s += "<script>"
         "function toggleTheme() {"
             "const body = document.body;"
             "const icon = document.getElementById('theme-icon');"
@@ -1012,15 +1206,7 @@ String ESP32GetResetReason(uint32_t cpu_no) {
         case EXT_CPU_RESET:         return F("for APP CPU, reseted by PRO CPU");
         case RTCWDT_BROWN_OUT_RESET:return F("Reset when the vdd voltage is not stable");
         case RTCWDT_RTC_RESET:      return F("RTC Watch dog reset digital core and rtc module");
-        /* esp32-cX?
-        case 17 : return F("Time Group1 reset CPU");                            // 17  -                 TG1WDT_CPU_RESET
-        case 18 : return F("Super watchdog reset digital core and rtc module"); // 18  -                 SUPER_WDT_RESET
-        case 19 : return F("Glitch reset digital core and rtc module");         // 19  -                 GLITCH_RTC_RESET
-        case 20 : return F("Efuse reset digital core");                         // 20                    EFUSE_RESET
-        case 21 : return F("Usb uart reset digital core");                      // 21                    USB_UART_CHIP_RESET
-        case 22 : return F("Usb jtag reset digital core");                      // 22                    USB_JTAG_CHIP_RESET
-        case 23 : return F("Power glitch reset digital core and rtc module");   // 23                    POWER_GLITCH_RESET
-         */
+
         default: break;
     }
     return F("No meaning"); // 0 and undefined
@@ -1029,7 +1215,7 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 static void add_sysinfo_footer(String &s)
 {
     s += "<div class='footer'>"
-         "<a href='https://github.com/steigerbalett/lacrosse2mqtt'>Powered by LaCrosse2MQTT</a> | "
+         "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>Powered by LaCrosse2MQTT</a> | "
          "<a href='/'>🏠 Home</a> | "
          "<a href='/config.html'>⚙️ Configuration</a> | "
          "<a href='/update'>📦 Update</a>"
@@ -1046,7 +1232,7 @@ void handle_index()
     
     index += "<div class='card'>";
     index += "<h2>System Status</h2>";
-    index += "<p>";
+    index += "<p id='system-status'>";
     if (mqtt_ok) {
         index += "<span class='status-badge status-ok'>✓ MQTT Connected</span> ";
     } else {
@@ -1058,9 +1244,11 @@ void handle_index()
         index += "<span class='status-badge status-error'>✗ WiFi Disconnected</span>";
     }
     index += "</p>";
-    index += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
-    index += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
-    index += "<p class='info-text'>Uptime: " + time_string() + "</p>";
+    
+    index += "<p class='info-text' id='wifi-ssid'>SSID: " + WiFi.SSID() + "</p>";
+    index += "<p class='info-text' id='wifi-ip'>IP: " + WiFi.localIP().toString() + "</p>";
+    index += "<p class='info-text' id='system-uptime'>Uptime: " + time_string() + "</p>";
+    index += "<p class='info-text' id='cpu-load'>CPU Load: " + String(cpu_usage, 1) + "%</p>";
     index += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
     index += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
     index += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
@@ -1083,6 +1271,17 @@ void handle_index()
     add_current_table(index, true);
     index += "</div>";
     
+    index += "<div class='card card-full'>";
+    index += "<div style='display:flex;justify-content:space-between;align-items:center;padding:8px;background-color:var(--secondary-background-color);border-radius:4px;'>";
+    index += "<div>";
+    index += "<strong>Automatic Data Refresh</strong><br>";
+    index += "<span style='font-size:12px;color:var(--secondary-text-color)'>Sensor data updates every 5 seconds</span><br>";
+    index += "<span class='refresh-status' id='refresh-status' style='font-size:12px;'>⏳ Starting...</span>";
+    index += "</div>";
+    index += "<button id='auto-refresh-btn' onclick='toggleAutoRefresh()' style='background-color:var(--warning-color);min-width:100px;'>⏸️ Pause Auto-Refresh</button>";
+    index += "</div>";
+    index += "</div>";
+
     add_sysinfo_footer(index);
     server.send(200, "text/html", index);
 }
@@ -1269,7 +1468,7 @@ void handle_config() {
     
     resp += "<div class='card'>";
     resp += "<h2>System Status</h2>";
-    resp += "<p>";
+    resp += "<p id='system-status'>";
     if (mqtt_ok) {
         resp += "<span class='status-badge status-ok'>✓ MQTT Connected</span> ";
     } else {
@@ -1280,10 +1479,37 @@ void handle_config() {
     } else {
         resp += "<span class='status-badge status-error'>✗ WiFi Disconnected</span>";
     }
+
+     // CPU-Auslastung mit Farbe
+    resp += "<p class='info-text' id='cpu-load'>CPU Load: ";
+    resp += "<span style='font-weight: 500; color: ";
+    if (cpu_usage < 50) {
+        resp += "var(--success-color);'>"; // Grün
+    } else if (cpu_usage < 80) {
+        resp += "var(--warning-color);'>"; // Orange
+    } else {
+        resp += "var(--error-color);'>"; // Rot
+    }
+    resp += String(cpu_usage, 1) + "%</span>";
+    
+    // CPU-Balken
+    resp += " <span style='display: inline-block; width: 100px; height: 8px; background: var(--divider-color); border-radius: 4px; vertical-align: middle;'>";
+    resp += "<span style='display: block; width: " + String(cpu_usage, 0) + "%; height: 100%; background: ";
+    if (cpu_usage < 50) {
+        resp += "var(--success-color);";
+    } else if (cpu_usage < 80) {
+        resp += "var(--warning-color);";
+    } else {
+        resp += "var(--error-color);";
+    }
+    resp += " border-radius: 4px;'></span></span>";
     resp += "</p>";
-    resp += "<p class='info-text'>SSID: " + WiFi.SSID() + "</p>";
-    resp += "<p class='info-text'>IP: " + WiFi.localIP().toString() + "</p>";
-    resp += "<p class='info-text'>Uptime: " + time_string() + "</p>";
+
+    resp += "</p>";
+    resp += "<p class='info-text' id='wifi-ssid'>SSID: " + WiFi.SSID() + "</p>";
+    resp += "<p class='info-text' id='wifi-ip'>IP: " + WiFi.localIP().toString() + "</p>";
+    resp += "<p class='info-text' id='system-uptime'>Uptime: " + time_string() + "</p>";
+    resp += "<p class='info-text'>Loop Count: " + String(loop_count) + "</p>";
     resp += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
     resp += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
     resp += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
@@ -1571,6 +1797,17 @@ void handle_config() {
 
     resp += "</div>";
     
+    resp += "<div class='card card-full'>";
+    resp += "<div class='refresh-control'>";
+    resp += "<div>";
+    resp += "<strong>Automatic Data Refresh</strong><br>";
+    resp += "<span style='font-size:12px;color:var(--secondary-text-color)'>System status updates every 5 seconds</span><br>";
+    resp += "<span class='refresh-status' id='refresh-status' style='font-size:12px;'>⏳ Starting...</span>";
+    resp += "</div>";
+    resp += "<button id='auto-refresh-btn' onclick='toggleAutoRefresh()' style='background-color:var(--warning-color);min-width:120px;'>⏸️ Pause Auto-Refresh</button>";
+    resp += "</div>";
+    resp += "</div>";
+    
     add_sysinfo_footer(resp);
     server.send(200, "text/html", resp);
 }
@@ -1759,6 +1996,7 @@ void setup_web()
     
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
+    server.on("/sensors.json", handle_sensors_json);  // NEU!
     server.on("/config.html", handle_config);
     server.on("/debug.html", handle_debug);
     server.on("/update", HTTP_GET, handle_update_page);
