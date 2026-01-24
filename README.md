@@ -28,9 +28,9 @@ On the config page, you can enter the hostname / IP of your MQTT broker. The top
 
 ## First upload
  * Open Chrome or any chromium based browser.
- * Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the release page.
+ * Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the [release page](https://github.com/steigerbalett/lacrosse2mqtt/releases).
  * Connect the board with your computer over USB.
- * Open [ESP Web Tools(https://espressif.github.io/esp-launchpad/)
+ * Open [ESP Web Tools](https://espressif.github.io/esp-launchpad/)
  * Click "connetct" and chose the right COM-Port.
  * Upload the bin file (follow the instuctions).
 
@@ -59,3 +59,8 @@ The following libraries are needed for building (could all be installed via ardu
 
    * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
 
+## To do
+ * Better MQTT data structure
+ * Fix MQTT for Weatherstations
+ * Add FHEM connector
+ * Maybe try to decode more sensors
