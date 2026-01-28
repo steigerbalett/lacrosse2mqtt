@@ -1,7 +1,7 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
-#define LACROSSE2MQTT_VERSION "2026.1.6"
+#define LACROSSE2MQTT_VERSION "2026.1.6b"
 
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2
@@ -60,8 +60,8 @@ struct Cache {
     uint8_t data[FRAME_LENGTH];
     float temp;
     byte humi;
-    bool batlo;        // Gilt für BEIDE Kanäle
-    bool init;         // Gilt für BEIDE Kanäle
+    bool batlo;
+    bool init;
     bool valid;
     byte channel;
     char sensorType[16];

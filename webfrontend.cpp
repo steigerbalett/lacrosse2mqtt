@@ -1219,6 +1219,7 @@ static void add_sysinfo_footer(String &s)
          "<a href='/'>🏠 Home</a> | "
          "<a href='/config.html'>⚙️ Configuration</a> | "
          "<a href='/update'>📦 Update</a>"
+         "<a href='https://github.com/steigerbalett/lacrosse2mqtt/blob/LICENSES.md' target='_blank'>📄 Licenses</a>"
          "</p></div>"
          "</body></html>";
 }
