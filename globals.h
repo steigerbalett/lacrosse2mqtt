@@ -1,7 +1,7 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
-#define LACROSSE2MQTT_VERSION "2026.1.6b"
+#define LACROSSE2MQTT_VERSION "2026.1.6"
 
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2

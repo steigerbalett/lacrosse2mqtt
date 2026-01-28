@@ -60,8 +60,7 @@ The following libraries are needed for building (could all be installed via ardu
    * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
 
 ## To do
- * Better MQTT data structure
- * Fix MQTT for Weatherstations
+
 ## Nice2have
  * Add FHEM connector
  * Add update checker and online update

@@ -1294,94 +1294,213 @@ void handle_licenses()
     
     page += "<div class='card card-full'>";
     page += "<h2>📄 Licenses and Attributions</h2>";
-    page += "<p class='info-text'>This project uses the following open-source components:</p>";
+    page += "<p class='info-text'>This project uses and builds upon the following open-source components and projects:</p>";
     
-    // Main Project
+    // ========== INSPIRATION & ORIGINAL PROJECTS ==========
     page += "<div class='card'>";
-    page += "<h3>LaCrosse2MQTT</h3>";
-    page += "<p><strong>Copyright:</strong> © 2021 Stefan Seyfried</p>";
-    page += "<p><strong>License:</strong> GNU General Public License v2.0 or later (GPL-2.0-or-later)</p>";
-    page += "<p><strong>Repository:</strong> <a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>github.com/steigerbalett/lacrosse2mqtt</a></p>";
+    page += "<h3>🌟 Inspiration & Original Projects</h3>";
+    page += "<p class='info-text'>This project was inspired by and builds upon the excellent work of:</p>";
+    
+    // FHEM
+    page += "<div style='margin: 20px 0; padding: 15px; border-left: 4px solid var(--accent-color); background-color: rgba(255, 152, 0, 0.08);'>";
+    page += "<h4 style='margin-top: 0; color: var(--accent-color);'>🏠 FHEM - Home Automation Server</h4>";
+    page += "<p><strong>Project:</strong> FHEM (Freundliche Hausautomation und Energie-Messung)</p>";
+    page += "<p><strong>Description:</strong> FHEM is a powerful Perl-based home automation server used to automate common tasks ";
+    page += "in the household and to collect data from various sensors. The LaCrosse protocol implementations in this project ";
+    page += "are based on the excellent work done by the FHEM community.</p>";
+    page += "<p><strong>Website:</strong> <a href='https://fhem.de/' target='_blank'>fhem.de</a></p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/fhem/fhem-mirror' target='_blank'>github.com/fhem/fhem-mirror</a></p>";
+    page += "<p><strong>Relevant Modules:</strong></p>";
+    page += "<ul style='margin-top: 8px;'>";
+    page += "<li><strong>36_LaCrosse.pm</strong> - LaCrosse IT+ sensor protocol decoder</li>";
+    page += "<li><strong>14_SD_WS.pm</strong> - Weather station protocol implementation (WH1080, WS1600, etc.)</li>";
+    page += "<li><strong>SIGNALduino</strong> - Radio signal processing foundation</li>";
+    page += "</ul>";
+    page += "<p><strong>License:</strong> GPL v2</p>";
+    page += "<p><strong>Attribution:</strong> Special thanks to the FHEM developers for their comprehensive protocol documentation and reference implementations.</p>";
     page += "</div>";
     
-    // Third-Party Libraries
+    // LaCrosse2MQTT Original
+    page += "<div style='margin: 20px 0; padding: 15px; border-left: 4px solid var(--primary-color); background-color: rgba(3, 169, 244, 0.08);'>";
+    page += "<h4 style='margin-top: 0; color: var(--primary-color);'>📡 LaCrosse Gateway (Original)</h4>";
+    page += "<p><strong>Author:</strong> Stefan Seyfried</p>";
+    page += "<p><strong>Description:</strong> Original LaCrosse gateway project that inspired this MQTT implementation. ";
+    page += "Provides the foundation for receiving and decoding LaCrosse IT+ sensor data using ESP32 and LoRa modules.</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/seife/LaCrosseGateway' target='_blank'>github.com/seife/LaCrosseGateway</a></p>";
+    page += "<p><strong>License:</strong> GPL-2.0</p>";
+    page += "</div>";
+    
+    // Weather Station Protocol Resources
+    page += "<div style='margin: 20px 0; padding: 15px; border-left: 4px solid var(--info-color); background-color: rgba(33, 150, 243, 0.08);'>";
+    page += "<h4 style='margin-top: 0; color: var(--info-color);'>🌦️ Weather Station Protocol Documentation</h4>";
+    page += "<p><strong>WH1080 Protocol:</strong></p>";
+    page += "<ul style='margin: 8px 0;'>";
+    page += "<li><a href='http://www.sevenwatt.com/main/wh1080-protocol-v2-fsk/' target='_blank'>SevenWatt WH1080 Protocol Documentation</a></li>";
+    page += "<li><a href='https://github.com/NetHome/Coders/tree/master/src/main/java/nu/nethome/coders/decoders' target='_blank'>NetHome Coders - Weather Station Decoders</a></li>";
+    page += "</ul>";
+    page += "<p><strong>RTL-433 Project:</strong> Comprehensive radio signal decoder</p>";
+    page += "<ul style='margin: 8px 0;'>";
+    page += "<li><a href='https://github.com/merbanan/rtl_433' target='_blank'>github.com/merbanan/rtl_433</a></li>";
+    page += "<li>Protocol documentation for 433MHz sensors including LaCrosse, WH1080, WS1600</li>";
+    page += "</ul>";
+    page += "</div>";
+    
+    page += "</div>"; // Ende Inspiration card
+    
+    // ========== MAIN PROJECT ==========
     page += "<div class='card'>";
-    page += "<h3>Third-Party Libraries</h3>";
+    page += "<h3>📦 LaCrosse2MQTT</h3>";
+    page += "<p><strong>Copyright:</strong> © 2021 Stefan Seyfried</p>";
+    page += "<p><strong>Enhanced by:</strong> Community Contributors (2024-2026)</p>";
+    page += "<p><strong>License:</strong> GNU General Public License v2.0 or later (GPL-2.0-or-later)</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>github.com/steigerbalett/lacrosse2mqtt</a></p>";
+    page += "<p><strong>Description:</strong> Bridge for LaCrosse IT+, WH1080, WS1600, WT440XH, and compatible 868MHz weather sensors to MQTT with Home Assistant auto-discovery.</p>";
+    page += "<p><strong>Supported Protocols:</strong></p>";
+    page += "<ul style='margin-top: 8px;'>";
+    page += "<li><strong>LaCrosse IT+</strong> - TX29-IT, TX27-IT, TX25-U, TX29DTH-IT (Temperature/Humidity sensors with multi-channel support)</li>";
+    page += "<li><strong>WH1080</strong> - Complete weather stations (Wind, Rain, Temperature, Humidity)</li>";
+    page += "<li><strong>WS1600</strong> - Weather sensors with multi-channel capability</li>";
+    page += "<li><strong>WT440XH</strong> - Compact temperature/humidity sensors</li>";
+    page += "<li><strong>TX35-IT/TX35DTH-IT</strong> - Additional sensor variants (9.579 kbps)</li>";
+    page += "<li><strong>TX38-IT</strong> - Indoor temperature sensors (8.842 kbps)</li>";
+    page += "</ul>";
+    page += "</div>";
+    
+    // ========== THIRD-PARTY LIBRARIES ==========
+    page += "<div class='card'>";
+    page += "<h3>📚 Third-Party Libraries</h3>";
+    
+    // Arduino ESP32 Core
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>1. Arduino Core for ESP32</h4>";
+    page += "<p><strong>Developer:</strong> Espressif Systems | <strong>License:</strong> LGPL-2.1</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/espressif/arduino-esp32' target='_blank'>github.com/espressif/arduino-esp32</a></p>";
+    page += "<p><strong>Purpose:</strong> ESP32 platform support and core libraries</p>";
+    page += "</div>";
     
     // LittleFS
     page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
-    page += "<h4>1. LittleFS for ESP32</h4>";
+    page += "<h4>2. LittleFS for ESP32</h4>";
     page += "<p><strong>Author:</strong> lorol | <strong>License:</strong> LGPL</p>";
     page += "<p><strong>Repository:</strong> <a href='https://github.com/lorol/LITTLEFS' target='_blank'>github.com/lorol/LITTLEFS</a></p>";
+    page += "<p><strong>Purpose:</strong> Filesystem for configuration and data storage</p>";
     page += "</div>";
     
     // PubSubClient
     page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
-    page += "<h4>2. PubSubClient</h4>";
+    page += "<h4>3. PubSubClient</h4>";
     page += "<p><strong>Author:</strong> Nick O'Leary | <strong>License:</strong> MIT License</p>";
     page += "<p><strong>Repository:</strong> <a href='https://github.com/knolleary/pubsubclient' target='_blank'>github.com/knolleary/pubsubclient</a></p>";
+    page += "<p><strong>Purpose:</strong> MQTT client library for Arduino</p>";
     page += "</div>";
     
     // ArduinoJson
     page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
-    page += "<h4>3. ArduinoJson</h4>";
+    page += "<h4>4. ArduinoJson</h4>";
     page += "<p><strong>Author:</strong> Benoit Blanchon | <strong>License:</strong> MIT License</p>";
     page += "<p><strong>Website:</strong> <a href='https://arduinojson.org/' target='_blank'>arduinojson.org</a></p>";
+    page += "<p><strong>Purpose:</strong> JSON parsing and serialization</p>";
     page += "</div>";
     
     // Adafruit SSD1306
     page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
-    page += "<h4>4. Adafruit SSD1306</h4>";
+    page += "<h4>5. Adafruit SSD1306</h4>";
     page += "<p><strong>Author:</strong> Adafruit Industries | <strong>License:</strong> BSD License</p>";
     page += "<p><strong>Repository:</strong> <a href='https://github.com/adafruit/Adafruit_SSD1306' target='_blank'>github.com/adafruit/Adafruit_SSD1306</a></p>";
+    page += "<p><strong>Purpose:</strong> OLED display driver for status display</p>";
     page += "</div>";
     
     // Adafruit GFX
     page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
-    page += "<h4>5. Adafruit GFX Library</h4>";
+    page += "<h4>6. Adafruit GFX Library</h4>";
     page += "<p><strong>Author:</strong> Adafruit Industries | <strong>License:</strong> BSD License</p>";
     page += "<p><strong>Repository:</strong> <a href='https://github.com/adafruit/Adafruit-GFX-Library' target='_blank'>github.com/adafruit/Adafruit-GFX-Library</a></p>";
+    page += "<p><strong>Purpose:</strong> Graphics library for displays</p>";
     page += "</div>";
     
     // WiFiManager
     page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
-    page += "<h4>6. WiFiManager</h4>";
+    page += "<h4>7. WiFiManager</h4>";
     page += "<p><strong>Author:</strong> tzapu | <strong>License:</strong> MIT License</p>";
     page += "<p><strong>Repository:</strong> <a href='https://github.com/tzapu/WiFiManager' target='_blank'>github.com/tzapu/WiFiManager</a></p>";
+    page += "<p><strong>Purpose:</strong> WiFi configuration portal for easy setup</p>";
     page += "</div>";
     
     page += "</div>"; // Ende Third-Party Libraries card
     
-    // License Summary Table
+    // ========== LICENSE SUMMARY TABLE ==========
     page += "<div class='card'>";
-    page += "<h3>License Summary</h3>";
+    page += "<h3>📋 License Summary</h3>";
     page += "<table>";
     page += "<thead><tr><th>Component</th><th>License</th><th>Purpose</th></tr></thead>";
     page += "<tbody>";
     page += "<tr><td>LaCrosse2MQTT</td><td>GPL-2.0-or-later</td><td>Main project</td></tr>";
+    page += "<tr><td>FHEM Protocol Implementations</td><td>GPL-2.0</td><td>Protocol reference</td></tr>";
+    page += "<tr><td>ESP32 Arduino Core</td><td>LGPL-2.1</td><td>Platform support</td></tr>";
     page += "<tr><td>PubSubClient</td><td>MIT</td><td>MQTT client</td></tr>";
     page += "<tr><td>ArduinoJson</td><td>MIT</td><td>JSON parsing</td></tr>";
     page += "<tr><td>WiFiManager</td><td>MIT</td><td>WiFi configuration</td></tr>";
     page += "<tr><td>Adafruit SSD1306</td><td>BSD</td><td>OLED display driver</td></tr>";
     page += "<tr><td>Adafruit GFX</td><td>BSD</td><td>Graphics library</td></tr>";
     page += "<tr><td>LittleFS</td><td>LGPL</td><td>Filesystem</td></tr>";
-    page += "<tr><td>ESP32 Arduino Core</td><td>LGPL-2.1</td><td>Platform support</td></tr>";
     page += "</tbody>";
     page += "</table>";
     page += "</div>";
     
-    // Additional Info
+    // ========== HARDWARE & RF INFORMATION ==========
     page += "<div class='card'>";
-    page += "<h3>Full License Texts</h3>";
-    page += "<p>Complete license texts are available at:</p>";
-    page += "<ul>";
-    page += "<li><a href='https://www.gnu.org/licenses/gpl-2.0.html' target='_blank'>GNU GPL v2.0</a></li>";
-    page += "<li><a href='https://www.gnu.org/licenses/lgpl.html' target='_blank'>GNU LGPL</a></li>";
-    page += "<li><a href='https://opensource.org/licenses/MIT' target='_blank'>MIT License</a></li>";
-    page += "<li><a href='https://opensource.org/licenses/BSD-3-Clause' target='_blank'>BSD License</a></li>";
+    page += "<h3>🔧 Hardware & RF Protocol Information</h3>";
+    page += "<p><strong>Radio Frequency:</strong> 868.3 MHz (EU ISM Band)</p>";
+    page += "<p><strong>Modulation:</strong> FSK (Frequency Shift Keying)</p>";
+    page += "<p><strong>Supported Hardware:</strong></p>";
+    page += "<ul style='margin-top: 8px;'>";
+    page += "<li>TTGO LoRa32 (ESP32 with SX1276/SX1278 LoRa module)</li>";
+    page += "<li>Heltec WiFi LoRa 32</li>";
+    page += "<li>Other ESP32 boards with compatible SX127x modules</li>";
     page += "</ul>";
-    page += "<p class='info-text' style='margin-top: 20px;'>Full attribution details: ";
-    page += "<a href='https://github.com/steigerbalett/lacrosse2mqtt/blob/llm_opti/LICENSES.md' target='_blank'>LICENSES.md on GitHub</a></p>";
+    page += "<p><strong>Protocol Bit Rates:</strong></p>";
+    page += "<ul style='margin-top: 8px;'>";
+    page += "<li>LaCrosse IT+ (TX29-IT, TX27-IT): 17.241 kbps</li>";
+    page += "<li>TX35-IT / TX35DTH-IT: 9.579 kbps</li>";
+    page += "<li>TX38-IT: 8.842 kbps</li>";
+    page += "<li>WH1080, WS1600: Various rates (auto-detected)</li>";
+    page += "</ul>";
+    page += "</div>";
+    
+    // ========== FULL LICENSE TEXTS ==========
+    page += "<div class='card'>";
+    page += "<h3>📜 Full License Texts</h3>";
+    page += "<p>Complete license texts are available at:</p>";
+    page += "<ul style='margin-top: 12px; line-height: 1.8;'>";
+    page += "<li><strong>GNU GPL v2.0:</strong> <a href='https://www.gnu.org/licenses/gpl-2.0.html' target='_blank'>gnu.org/licenses/gpl-2.0.html</a></li>";
+    page += "<li><strong>GNU LGPL:</strong> <a href='https://www.gnu.org/licenses/lgpl.html' target='_blank'>gnu.org/licenses/lgpl.html</a></li>";
+    page += "<li><strong>MIT License:</strong> <a href='https://opensource.org/licenses/MIT' target='_blank'>opensource.org/licenses/MIT</a></li>";
+    page += "<li><strong>BSD License:</strong> <a href='https://opensource.org/licenses/BSD-3-Clause' target='_blank'>opensource.org/licenses/BSD-3-Clause</a></li>";
+    page += "</ul>";
+    page += "</div>";
+    
+    // ========== ACKNOWLEDGMENTS ==========
+    page += "<div class='card'>";
+    page += "<h3>🙏 Acknowledgments</h3>";
+    page += "<p>Special thanks to:</p>";
+    page += "<ul style='margin-top: 12px; line-height: 1.8;'>";
+    page += "<li><strong>FHEM Community</strong> - For comprehensive protocol documentation and reference implementations</li>";
+    page += "<li><strong>Stefan Seyfried (seife)</strong> - Original LaCrosse Gateway project</li>";
+    page += "<li><strong>RTL-433 Project</strong> - Extensive 433/868MHz protocol database</li>";
+    page += "<li><strong>SevenWatt.com</strong> - WH1080 protocol documentation</li>";
+    page += "<li><strong>Home Assistant Community</strong> - MQTT Discovery integration patterns</li>";
+    page += "<li><strong>All Open Source Contributors</strong> - For making this project possible</li>";
+    page += "</ul>";
+    page += "</div>";
+    
+    // ========== FOOTER INFO ==========
+    page += "<div class='card' style='background-color: rgba(3, 169, 244, 0.08); border: 1px solid var(--primary-color);'>";
+    page += "<p style='margin: 0; text-align: center; font-size: 13px;'>";
+    page += "<strong>Complete Documentation:</strong> ";
+    page += "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>GitHub Repository</a> | ";
+    page += "<a href='https://github.com/steigerbalett/lacrosse2mqtt/blob/main/README.md' target='_blank'>README</a> | ";
+    page += "<a href='https://github.com/steigerbalett/lacrosse2mqtt/blob/main/LICENSES.md' target='_blank'>Full License File</a>";
+    page += "</p>";
     page += "</div>";
     
     page += "</div>"; // Ende card-full
