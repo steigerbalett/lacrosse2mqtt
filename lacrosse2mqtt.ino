@@ -13,7 +13,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * You should have received a copy of the GNU General Public License along
-
+ * with this program; if not, got to [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/)
  */
 
 #include <LittleFS.h>
@@ -618,6 +618,14 @@ void receive()
             if (channel == 1) {
                 pub_hass_battery_config(ID);
             }
+        }
+        // Debug
+        if (config.debug_mode) {
+            Serial.printf("[MQTT] ID=%d Ch=%d Cache-Index=%d Name=%s\n", 
+                          ID, channel, cacheIndex, 
+                          id2name[ID].length() > 0 ? id2name[ID].c_str() : "none");
+            Serial.printf("[MQTT] Topics Base: %s\n", mqttBaseTopic.c_str());
+            Serial.printf("[MQTT] Battery Topic: %s\n", batteryTopic.c_str());
         }
 
     } else {

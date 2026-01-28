@@ -1219,7 +1219,7 @@ static void add_sysinfo_footer(String &s)
          "<a href='/'>🏠 Home</a> | "
          "<a href='/config.html'>⚙️ Configuration</a> | "
          "<a href='/update'>📦 Update</a>"
-         "<a href='https://github.com/steigerbalett/lacrosse2mqtt/blob/LICENSES.md' target='_blank'>📄 Licenses</a>"
+         "<a href='/licenses.html'>📄 Licenses</a>";
          "</p></div>"
          "</body></html>";
 }
@@ -1285,6 +1285,109 @@ void handle_index()
 
     add_sysinfo_footer(index);
     server.send(200, "text/html", index);
+}
+
+void handle_licenses()
+{
+    String page;
+    add_header(page, "Licenses & Attributions");
+    
+    page += "<div class='card card-full'>";
+    page += "<h2>📄 Licenses and Attributions</h2>";
+    page += "<p class='info-text'>This project uses the following open-source components:</p>";
+    
+    // Main Project
+    page += "<div class='card'>";
+    page += "<h3>LaCrosse2MQTT</h3>";
+    page += "<p><strong>Copyright:</strong> © 2021 Stefan Seyfried</p>";
+    page += "<p><strong>License:</strong> GNU General Public License v2.0 or later (GPL-2.0-or-later)</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>github.com/steigerbalett/lacrosse2mqtt</a></p>";
+    page += "</div>";
+    
+    // Third-Party Libraries
+    page += "<div class='card'>";
+    page += "<h3>Third-Party Libraries</h3>";
+    
+    // LittleFS
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>1. LittleFS for ESP32</h4>";
+    page += "<p><strong>Author:</strong> lorol | <strong>License:</strong> LGPL</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/lorol/LITTLEFS' target='_blank'>github.com/lorol/LITTLEFS</a></p>";
+    page += "</div>";
+    
+    // PubSubClient
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>2. PubSubClient</h4>";
+    page += "<p><strong>Author:</strong> Nick O'Leary | <strong>License:</strong> MIT License</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/knolleary/pubsubclient' target='_blank'>github.com/knolleary/pubsubclient</a></p>";
+    page += "</div>";
+    
+    // ArduinoJson
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>3. ArduinoJson</h4>";
+    page += "<p><strong>Author:</strong> Benoit Blanchon | <strong>License:</strong> MIT License</p>";
+    page += "<p><strong>Website:</strong> <a href='https://arduinojson.org/' target='_blank'>arduinojson.org</a></p>";
+    page += "</div>";
+    
+    // Adafruit SSD1306
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>4. Adafruit SSD1306</h4>";
+    page += "<p><strong>Author:</strong> Adafruit Industries | <strong>License:</strong> BSD License</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/adafruit/Adafruit_SSD1306' target='_blank'>github.com/adafruit/Adafruit_SSD1306</a></p>";
+    page += "</div>";
+    
+    // Adafruit GFX
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>5. Adafruit GFX Library</h4>";
+    page += "<p><strong>Author:</strong> Adafruit Industries | <strong>License:</strong> BSD License</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/adafruit/Adafruit-GFX-Library' target='_blank'>github.com/adafruit/Adafruit-GFX-Library</a></p>";
+    page += "</div>";
+    
+    // WiFiManager
+    page += "<div style='margin: 15px 0; padding: 10px; border-left: 3px solid var(--primary-color);'>";
+    page += "<h4>6. WiFiManager</h4>";
+    page += "<p><strong>Author:</strong> tzapu | <strong>License:</strong> MIT License</p>";
+    page += "<p><strong>Repository:</strong> <a href='https://github.com/tzapu/WiFiManager' target='_blank'>github.com/tzapu/WiFiManager</a></p>";
+    page += "</div>";
+    
+    page += "</div>"; // Ende Third-Party Libraries card
+    
+    // License Summary Table
+    page += "<div class='card'>";
+    page += "<h3>License Summary</h3>";
+    page += "<table>";
+    page += "<thead><tr><th>Component</th><th>License</th><th>Purpose</th></tr></thead>";
+    page += "<tbody>";
+    page += "<tr><td>LaCrosse2MQTT</td><td>GPL-2.0-or-later</td><td>Main project</td></tr>";
+    page += "<tr><td>PubSubClient</td><td>MIT</td><td>MQTT client</td></tr>";
+    page += "<tr><td>ArduinoJson</td><td>MIT</td><td>JSON parsing</td></tr>";
+    page += "<tr><td>WiFiManager</td><td>MIT</td><td>WiFi configuration</td></tr>";
+    page += "<tr><td>Adafruit SSD1306</td><td>BSD</td><td>OLED display driver</td></tr>";
+    page += "<tr><td>Adafruit GFX</td><td>BSD</td><td>Graphics library</td></tr>";
+    page += "<tr><td>LittleFS</td><td>LGPL</td><td>Filesystem</td></tr>";
+    page += "<tr><td>ESP32 Arduino Core</td><td>LGPL-2.1</td><td>Platform support</td></tr>";
+    page += "</tbody>";
+    page += "</table>";
+    page += "</div>";
+    
+    // Additional Info
+    page += "<div class='card'>";
+    page += "<h3>Full License Texts</h3>";
+    page += "<p>Complete license texts are available at:</p>";
+    page += "<ul>";
+    page += "<li><a href='https://www.gnu.org/licenses/gpl-2.0.html' target='_blank'>GNU GPL v2.0</a></li>";
+    page += "<li><a href='https://www.gnu.org/licenses/lgpl.html' target='_blank'>GNU LGPL</a></li>";
+    page += "<li><a href='https://opensource.org/licenses/MIT' target='_blank'>MIT License</a></li>";
+    page += "<li><a href='https://opensource.org/licenses/BSD-3-Clause' target='_blank'>BSD License</a></li>";
+    page += "</ul>";
+    page += "<p class='info-text' style='margin-top: 20px;'>Full attribution details: ";
+    page += "<a href='https://github.com/steigerbalett/lacrosse2mqtt/blob/llm_opti/LICENSES.md' target='_blank'>LICENSES.md on GitHub</a></p>";
+    page += "</div>";
+    
+    page += "</div>"; // Ende card-full
+    
+    add_sysinfo_footer(page);
+    server.send(200, "text/html", page);
 }
 
 const String on = "on";
@@ -2000,6 +2103,7 @@ void setup_web()
     server.on("/sensors.json", handle_sensors_json);  // NEU!
     server.on("/config.html", handle_config);
     server.on("/debug.html", handle_debug);
+    server.on("/licenses.html", handle_licenses);
     server.on("/update", HTTP_GET, handle_update_page);
     
     server.onNotFound([]() {

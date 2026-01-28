@@ -81,10 +81,10 @@ struct Cache {
 };
 
 // Hilfsfunktion für Cache-Index
-// ID 30 Ch1 → Index 60 (30*2 + 0)
-// ID 30 Ch2 → Index 61 (30*2 + 1)
+// ID 30 Ch1 → Index 30
+// ID 30 Ch2 → Index 30 (gleicher Index!)
 static inline int GetCacheIndex(byte ID, byte channel) {
-    return (ID * 2) + (channel - 1);
+    return ID;
 }
 
 struct Config {
