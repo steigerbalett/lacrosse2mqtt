@@ -1,7 +1,7 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
-#define LACROSSE2MQTT_VERSION "2026.1.4"
+#define LACROSSE2MQTT_VERSION "2026.1.6"
 
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2
@@ -53,25 +53,38 @@ static const uint8_t LED_BUILTIN = 2;
 #define HASS_CFG_TEMP2 (1 << 2)
 
 struct Cache {
-    byte data[FRAME_LENGTH];
-    uint32_t timestamp;
-    int8_t rssi;
+    unsigned long timestamp;
+    byte ID;
+    byte rate;
+    int rssi;
+    uint8_t data[FRAME_LENGTH];
     float temp;
-    int8_t humi;
+    byte humi;
     bool batlo;
     bool init;
     bool valid;
     byte channel;
-    byte ID;
-    uint16_t rate;
     char sensorType[16];
+    
+    // Kanal 2 Daten (nur Temperatur!)
+    float temp_ch2;
+    unsigned long timestamp_ch2;
+    
+    // Wetterstation Daten
+    float wind_speed;
+    int wind_direction;
+    float rain;
+    float rain_total;
+    byte wind_gust;
+    unsigned long rain_timestamp;
+    unsigned long wind_timestamp;
 };
 
-// NEU: Hilfsfunktion für Cache-Index
-// ID 30 Ch1 → Index 60 (30*2 + 0)
-// ID 30 Ch2 → Index 61 (30*2 + 1)
+// Hilfsfunktion für Cache-Index
+// ID 30 Ch1 → Index 30
+// ID 30 Ch2 → Index 30 (gleicher Index!)
 static inline int GetCacheIndex(byte ID, byte channel) {
-    return (ID * 2) + (channel - 1);
+    return ID;
 }
 
 struct Config {

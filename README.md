@@ -6,6 +6,7 @@ This is a gateway to receive temperature and humidity from (868 MHz)
  * TX38IT - indoor temperature sensors
  * WS1600 - Weatherstations
  * WT440XH - temperature + humidity sensors
+
 and publish them to a MQTT broker.
 
 The code was originally inspired by [LaCrosseITPlusReader](https://github.com/rinie/LaCrosseITPlusReader) but the original code has been completely reworked since then.
@@ -25,15 +26,23 @@ On the config page, you can enter the hostname / IP of your MQTT broker. The top
    * `lacrosse/id_<ID>/temp`, `lacrosse/id_<ID>/humi` the same but per ID. Note that the ID may change after a battery change! Labels can be rearranged after a battery change for stable naming.
    * `lacrosse/id_<ID>/state` additional flags "low_batt", "init" (for new battery state), "RSSI" (signal), "baud" (data rate) as JSON string
 
-## Reset WiFi
-Long press (5s) the button
-
-## Toggle Display
-Short press the button
+## First upload
+ * Open Chrome or any chromium based browser.
+ * Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the [release page](https://github.com/steigerbalett/lacrosse2mqtt/releases).
+ * Connect the board with your computer over USB.
+ * Open [ESP Web Tools](https://espressif.github.io/esp-launchpad/)
+ * Click "connetct" and chose the right COM-Port.
+ * Upload the bin file (follow the instuctions).
 
 ## Firmware update
 Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the release page.
 The software update can be uploaded via the "Update software" link from the configuration page
+
+## Reset WiFi
+Long press (5s) the PRG button
+
+## Toggle Display
+Short press the PRG button
 
 ## Debugging
 More information about the current state is printed to the serial console, configured at 115200 baud.
@@ -50,3 +59,9 @@ The following libraries are needed for building (could all be installed via ardu
 
    * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
 
+## To do
+
+## Nice2have
+ * Add FHEM connector
+ * Add update checker and online update
+ * Maybe try to decode more sensors

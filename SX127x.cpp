@@ -162,6 +162,11 @@ SX127x::SX127x(byte ss, byte reset)
     m_datarate = 0;
     m_frequency = 868300;
     m_payloadready = false;
+    active_rate_count = 0;
+    current_rate_index = 0;
+    for (int i = 0; i < 3; i++) {
+        active_rates[i] = 0;
+    }
 }
 
 int SX127x::GetDataRate()
