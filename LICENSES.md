@@ -272,6 +272,17 @@ These libraries are part of the ESP32 Arduino Core and are licensed under the LG
 
 ---
 
+### LaCrosseITPlusReader10
+
+Teile des Codes (insbesondere Protokoll-Decoder für WH24/WH25/W136 sowie serielle FHEM‑Anbindung) basieren auf:
+
+- Repository: https://github.com/rinie/LaCrosseITPlusReader10
+- Autor: rinie (und weitere Mitwirkende)
+- Ursprung: LaCrosse IT+ Reader aus dem FHEM‑Projekt  
+  (siehe Link im README von LaCrosseITPlusReader10)
+
+---
+
 ## License Summary
 
 | Component | License | Purpose |
