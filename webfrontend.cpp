@@ -317,6 +317,7 @@ void add_current_table(String &s, bool rawdata)
     s += "<th>Ch</th>";
     s += "<th>Type</th>";
     s += "<th>Temperature</th>";
+    s += "<th>Temp 2</th>";
     s += "<th>Humidity</th>";
     s += "<th>RSSI</th>";
     s += "<th>Name</th>";
@@ -365,8 +366,17 @@ void add_current_table(String &s, bool rawdata)
         // Type
         s += "<td>" + sensorType + "</td>";
 
-        // Temperatur
+        // Temperatur 1
         s += "<td>" + String(fcache[i].temp, 1) + " °C</td>";
+
+        // Temperatur 2
+        // Prüfe ob ein zweiter Temperaturwert existiert
+        // Falls nicht verfügbar, zeige "-"
+        if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
+            s += "<td>" + String(fcache[i].temp_ch2, 1) + " °C</td>";
+        } else {
+            s += "<td>-</td>";
+        }
 
         // Luftfeuchtigkeit
         if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
@@ -426,7 +436,7 @@ void add_current_table(String &s, bool rawdata)
     }
 }
 
-// NEU: JSON-Endpoint für Sensordaten
+// JSON-Endpoint für Sensordaten
 void handle_sensors_json() {
     unsigned long now = millis();
     JsonDocument doc;
@@ -442,6 +452,11 @@ void handle_sensors_json() {
         sensor["ch"] = fcache[i].channel;
         sensor["type"] = String(fcache[i].sensorType);
         sensor["temp"] = serialized(String(fcache[i].temp, 1));
+        if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
+            sensor["temp2"] = serialized(String(fcache[i].temp_ch2, 1));
+        } else {
+            sensor["temp2"] = nullptr;
+        }
         sensor["humi"] = fcache[i].humi;
         sensor["rssi"] = fcache[i].rssi;
         sensor["name"] = id2name[fcache[i].ID];
@@ -489,82 +504,83 @@ static void add_header(String &s, const String &title)
              "let refreshTimer;"
              
              "function updateSensorData() {"
-"  if (!autoRefreshEnabled) return;"
-"  fetch('/sensors.json')"
-"    .then(response => response.json())"
-"    .then(data => {"
-"      const tbody = document.getElementById('sensor-tbody');"
-"      if (tbody) {"
-"        tbody.innerHTML = '';"
-"        data.sensors.forEach(sensor => {"
-"          const row = tbody.insertRow();"
-"          row.innerHTML = '<td>' + sensor.id + '</td>' +"  // ← String-Konkatenation statt Template
-"            '<td>' + sensor.ch + '</td>' +"
-"            '<td>' + sensor.type + '</td>' +"
-"            '<td>' + sensor.temp + ' °C</td>' +"
-"            '<td>' + (sensor.humi > 0 && sensor.humi <= 100 ? sensor.humi + ' %' : '-') + '</td>' +"
-"            '<td>' + sensor.rssi + '</td>' +"
-"            '<td>' + (sensor.name || '-') + '</td>' +"
-"            '<td>' + sensor.age + '</td>' +"
-"            '<td class=\"' + (sensor.batlo ? 'batt-weak' : 'batt-ok') + '\">' + (sensor.batlo ? 'weak' : 'ok') + '</td>' +"
-"            '<td class=\"' + (sensor.init ? 'init-new' : 'init-no') + '\">' + (sensor.init ? 'yes' : 'no') + '</td>' +"
-"            '<td class=\"raw-data\">0x' + sensor.raw + '</td>';"
-"        });"
-"      }"
-"      const systemStatus = document.getElementById('system-status');"
-"      if (systemStatus) {"
-"        let statusHtml = '';"
-"        if (data.mqtt_ok) {"
-"          statusHtml += '<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
-"        } else {"
-"          statusHtml += '<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
-"        }"
-"        if (data.wifi_ok) {"
-"          statusHtml += '<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
-"        } else {"
-"          statusHtml += '<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';"
-"        }"
-"        systemStatus.innerHTML = statusHtml;"
-"      }"
-"      const wifiSsid = document.getElementById('wifi-ssid');"
-"      if (wifiSsid && data.wifi_ssid) {"
-"        wifiSsid.textContent = 'SSID: ' + data.wifi_ssid;"
-"      }"
-"      const wifiIp = document.getElementById('wifi-ip');"
-"      if (wifiIp && data.wifi_ip) {"
-"        wifiIp.textContent = 'IP: ' + data.wifi_ip;"
-"      }"
-"      const uptime = document.getElementById('system-uptime');"
-"      if (uptime && data.uptime) {"
-"        uptime.textContent = 'Uptime: ' + data.uptime;"
-"      }"
-"      const cpuLoad = document.getElementById('cpu-load');"
-"      if (cpuLoad && data.cpu_usage) {"
-"        cpuLoad.textContent = 'CPU Load: ' + data.cpu_usage + '%';"
-"      }"
-"      const countElem = document.getElementById('sensor-count');"
-"      if (countElem) {"
-"        if (data.count === 0) {"
-"          countElem.innerHTML = '<em>No sensors found. Waiting for data...</em>';"
-"        } else {"
-"          countElem.innerHTML = '<em>Total sensors: ' + data.count + ' | Last update: ' + new Date().toLocaleTimeString() + '</em>';"
-"        }"
-"      }"
-"      const refreshStatus = document.getElementById('refresh-status');"
-"      if (refreshStatus) {"
-"        refreshStatus.textContent = '✓ Live (updated ' + new Date().toLocaleTimeString() + ')';"
-"        refreshStatus.style.color = 'var(--success-color)';"
-"      }"
-"    })"
-"    .catch(error => {"
-"      console.error('Error:', error);"
-"      const refreshStatus = document.getElementById('refresh-status');"
-"      if (refreshStatus) {"
-"        refreshStatus.textContent = '✗ Error';"
-"        refreshStatus.style.color = 'var(--error-color)';"
-"      }"
-"    });"
-"}"
+             "  if (!autoRefreshEnabled) return;"
+             "  fetch('/sensors.json')"
+             "    .then(response => response.json())"
+             "    .then(data => {"
+             "      const tbody = document.getElementById('sensor-tbody');"
+             "      if (tbody) {"
+             "        tbody.innerHTML = '';"
+             "        data.sensors.forEach(sensor => {"
+             "          const row = tbody.insertRow();"
+             "          row.innerHTML = '<td>' + sensor.id + '</td>' +"  // ← String-Konkatenation statt Template
+             "            '<td>' + sensor.ch + '</td>' +"
+             "            '<td>' + sensor.type + '</td>' +"
+             "            '<td>' + sensor.temp + ' °C</td>' +"
+             "            '<td>' + (sensor.temp2 !== null ? sensor.temp2 + ' °C' : '-') + '</td>' +"
+             "            '<td>' + (sensor.humi > 0 && sensor.humi <= 100 ? sensor.humi + ' %' : '-') + '</td>' +"
+             "            '<td>' + sensor.rssi + '</td>' +"
+             "            '<td>' + (sensor.name || '-') + '</td>' +"
+             "            '<td>' + sensor.age + '</td>' +"
+             "            '<td class=\"' + (sensor.batlo ? 'batt-weak' : 'batt-ok') + '\">' + (sensor.batlo ? 'weak' : 'ok') + '</td>' +"
+             "            '<td class=\"' + (sensor.init ? 'init-new' : 'init-no') + '\">' + (sensor.init ? 'yes' : 'no') + '</td>' +"
+             "            '<td class=\"raw-data\">0x' + sensor.raw + '</td>';"
+             "        });"
+             "      }"
+             "      const systemStatus = document.getElementById('system-status');"
+             "      if (systemStatus) {"
+             "        let statusHtml = '';"
+             "        if (data.mqtt_ok) {"
+             "          statusHtml += '<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
+             "        } else {"
+             "          statusHtml += '<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
+             "        }"
+             "        if (data.wifi_ok) {"
+             "          statusHtml += '<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
+             "        } else {"
+             "          statusHtml += '<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';"
+             "        }"
+             "        systemStatus.innerHTML = statusHtml;"
+             "      }"
+             "      const wifiSsid = document.getElementById('wifi-ssid');"
+             "      if (wifiSsid && data.wifi_ssid) {"
+             "        wifiSsid.textContent = 'SSID: ' + data.wifi_ssid;"
+             "      }"
+             "      const wifiIp = document.getElementById('wifi-ip');"
+             "      if (wifiIp && data.wifi_ip) {"
+             "        wifiIp.textContent = 'IP: ' + data.wifi_ip;"
+             "      }"
+             "      const uptime = document.getElementById('system-uptime');"
+             "      if (uptime && data.uptime) {"
+             "        uptime.textContent = 'Uptime: ' + data.uptime;"
+             "      }"
+             "      const cpuLoad = document.getElementById('cpu-load');"
+             "      if (cpuLoad && data.cpu_usage) {"
+             "        cpuLoad.textContent = 'CPU Load: ' + data.cpu_usage + '%';"
+             "      }"
+             "      const countElem = document.getElementById('sensor-count');"
+             "      if (countElem) {"
+             "        if (data.count === 0) {"
+             "          countElem.innerHTML = '<em>No sensors found. Waiting for data...</em>';"
+             "        } else {"
+             "          countElem.innerHTML = '<em>Total sensors: ' + data.count + ' | Last update: ' + new Date().toLocaleTimeString() + '</em>';"
+             "        }"
+             "      }"
+             "      const refreshStatus = document.getElementById('refresh-status');"
+             "      if (refreshStatus) {"
+             "        refreshStatus.textContent = '✓ Live (updated ' + new Date().toLocaleTimeString() + ')';"
+             "        refreshStatus.style.color = 'var(--success-color)';"
+             "      }"
+             "    })"
+             "    .catch(error => {"
+             "      console.error('Error:', error);"
+             "      const refreshStatus = document.getElementById('refresh-status');"
+             "      if (refreshStatus) {"
+             "        refreshStatus.textContent = '✗ Error';"
+             "        refreshStatus.style.color = 'var(--error-color)';"
+             "      }"
+             "    });"
+             "}"
 
              "function toggleAutoRefresh() {"
              "  autoRefreshEnabled = !autoRefreshEnabled;"
@@ -1215,11 +1231,11 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 static void add_sysinfo_footer(String &s)
 {
     s += "<div class='footer'>"
-         "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>Powered by LaCrosse2MQTT</a> | "
          "<a href='/'>🏠 Home</a> | "
          "<a href='/config.html'>⚙️ Configuration</a> | "
          "<a href='/update'>📦 Update</a>"
-         "<a href='/licenses.html'>📄 Licenses</a>";
+         "<a href='/licenses.html'>📄 Licenses</a> | ";
+         "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>Powered by LaCrosse2MQTT</a>"
          "</p></div>"
          "</body></html>";
 }
