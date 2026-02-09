@@ -319,6 +319,12 @@ void add_current_table(String &s, bool rawdata)
     s += "<th>Temperature</th>";
     s += "<th>Temp 2</th>";
     s += "<th>Humidity</th>";
+    s += "<th>Wind Speed</th>";        // NEU
+    s += "<th>Wind Dir</th>";          // NEU
+    s += "<th>Wind Gust</th>";         // NEU
+    s += "<th>Rain</th>";              // NEU
+    s += "<th>Power</th>";             // NEU
+    s += "<th>Pressure</th>";          // NEU
     s += "<th>RSSI</th>";
     s += "<th>Name</th>";
     s += "<th>Age (ms)</th>";
@@ -381,6 +387,48 @@ void add_current_table(String &s, bool rawdata)
         // Luftfeuchtigkeit
         if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
             s += "<td>" + String(fcache[i].humi) + " %</td>";
+        } else {
+            s += "<td>-</td>";
+        }
+        
+        // Wind Speed
+        if (fcache[i].wind_speed > 0) {
+            s += "<td>" + String(fcache[i].wind_speed, 1) + " km/h</td>";
+        } else {
+            s += "<td>-</td>";
+        }
+
+        // Wind Direction
+        if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360) {
+            s += "<td>" + String(fcache[i].wind_direction) + "°</td>";
+        } else {
+            s += "<td>-</td>";
+        }
+
+        // Wind Gust
+        if (fcache[i].wind_gust > 0) {
+            s += "<td>" + String(fcache[i].wind_gust) + " km/h</td>";
+        } else {
+            s += "<td>-</td>";
+        }
+
+        // Rain
+        if (fcache[i].rain > 0 || fcache[i].rain_total > 0) {
+            s += "<td>" + String(fcache[i].rain_total, 1) + " mm</td>";
+        } else {
+            s += "<td>-</td>";
+        }
+
+        // Power (EMT7110)
+        if (fcache[i].power > 0) {
+            s += "<td>" + String(fcache[i].power, 1) + " W</td>";
+        } else {
+            s += "<td>-</td>";
+        }
+
+        // Pressure (WH24/WH25)
+        if (fcache[i].pressure > 0) {
+            s += "<td>" + String(fcache[i].pressure, 1) + " hPa</td>";
         } else {
             s += "<td>-</td>";
         }
@@ -452,18 +500,59 @@ void handle_sensors_json() {
         sensor["ch"] = fcache[i].channel;
         sensor["type"] = String(fcache[i].sensorType);
         sensor["temp"] = serialized(String(fcache[i].temp, 1));
+        
         if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
             sensor["temp2"] = serialized(String(fcache[i].temp_ch2, 1));
         } else {
             sensor["temp2"] = nullptr;
         }
+        
         sensor["humi"] = fcache[i].humi;
+        
+        // Wetterdaten
+        if (fcache[i].wind_speed > 0) {
+            sensor["wind_speed"] = serialized(String(fcache[i].wind_speed, 1));
+        } else {
+            sensor["wind_speed"] = nullptr;
+        }
+        
+        if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360) {
+            sensor["wind_dir"] = fcache[i].wind_direction;
+        } else {
+            sensor["wind_dir"] = nullptr;
+        }
+        
+        if (fcache[i].wind_gust > 0) {
+            sensor["wind_gust"] = fcache[i].wind_gust;
+        } else {
+            sensor["wind_gust"] = nullptr;
+        }
+        
+        if (fcache[i].rain_total > 0) {
+            sensor["rain"] = serialized(String(fcache[i].rain_total, 1));
+        } else {
+            sensor["rain"] = nullptr;
+        }
+        
+        if (fcache[i].power > 0) {
+            sensor["power"] = serialized(String(fcache[i].power, 1));
+        } else {
+            sensor["power"] = nullptr;
+        }
+        
+        if (fcache[i].pressure > 0) {
+            sensor["pressure"] = serialized(String(fcache[i].pressure, 1));
+        } else {
+            sensor["pressure"] = nullptr;
+        }
+        
         sensor["rssi"] = fcache[i].rssi;
         sensor["name"] = id2name[fcache[i].ID];
         sensor["age"] = now - fcache[i].timestamp;
         sensor["batlo"] = fcache[i].batlo;
         sensor["init"] = fcache[i].init;
         
+        // Raw Data
         String rawData = "";
         for (int j = 0; j < FRAME_LENGTH; j++) {
             char tmp[3];
@@ -519,6 +608,12 @@ static void add_header(String &s, const String &title)
              "            '<td>' + sensor.temp + ' °C</td>' +"
              "            '<td>' + (sensor.temp2 !== null ? sensor.temp2 + ' °C' : '-') + '</td>' +"
              "            '<td>' + (sensor.humi > 0 && sensor.humi <= 100 ? sensor.humi + ' %' : '-') + '</td>' +"
+             "            '<td>' + (sensor.wind_speed !== null ? sensor.wind_speed + ' km/h' : '-') + '</td>' +"
+             "            '<td>' + (sensor.wind_dir !== null ? sensor.wind_dir + '°' : '-') + '</td>' +"
+             "            '<td>' + (sensor.wind_gust !== null ? sensor.wind_gust + ' km/h' : '-') + '</td>' +"
+             "            '<td>' + (sensor.rain !== null ? sensor.rain + ' mm' : '-') + '</td>' +"
+             "            '<td>' + (sensor.power !== null ? sensor.power + ' W' : '-') + '</td>' +"
+             "            '<td>' + (sensor.pressure !== null ? sensor.pressure + ' hPa' : '-') + '</td>' +"         
              "            '<td>' + sensor.rssi + '</td>' +"
              "            '<td>' + (sensor.name || '-') + '</td>' +"
              "            '<td>' + sensor.age + '</td>' +"
@@ -1231,10 +1326,11 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 static void add_sysinfo_footer(String &s)
 {
     s += "<div class='footer'>"
-         "<a href='/'>🏠 Home</a> | "
-         "<a href='/config.html'>⚙️ Configuration</a> | "
-         "<a href='/update'>📦 Update</a>"
-         "<a href='/licenses.html'>📄 Licenses</a> | ";
+         "<p>"
+         "<a href='/'>Home</a> | "
+         "<a href='config.html'>Configuration</a> | "
+         "<a href='update'>Update</a> | "
+         "<a href='licenses.html'>Licenses</a> | "
          "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>Powered by LaCrosse2MQTT</a>"
          "</p></div>"
          "</body></html>";

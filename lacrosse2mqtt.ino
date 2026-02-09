@@ -29,6 +29,11 @@
 #include "ws1600.h"
 #include "wt440xh.h"
 #include "SX127x.h"
+#include "tx22it.h"
+#include "emt7110.h"
+#include "w136.h"
+#include "wh24.h"
+#include "wh25.h"
 #include <WiFiManager.h>
 
 #define FORMAT_LITTLEFS_IF_FAILED false
@@ -866,6 +871,157 @@ void receive()
                 
                 if (config.debug_mode) {
                     Serial.printf("[MQTT] WT440XH ID=%d Ch=%d Name=%s\n", ID, channel, sensorIdentifier.c_str());
+                }
+            }
+        }
+
+                // ========== VERSUCHE TX22IT PROTOKOLL ==========
+        if (!frame_valid && config.proto_tx22it && payLoadSize == 9) {
+            TX22IT::Frame tx22_frame;
+            tx22_frame.rssi = rssi;
+            tx22_frame.rate = rate;
+            
+            if (TX22IT::TryHandleData(payload, payLoadSize, &tx22_frame)) {
+                TX22IT::DisplayFrame(payload, payLoadSize, &tx22_frame);
+                
+                byte ID = tx22_frame.ID;
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                // Publish Weather Data
+                mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(tx22_frame.temp, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(tx22_frame.humi, DEC).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_speed").c_str(), String(tx22_frame.wind_speed, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_gust").c_str(), String(tx22_frame.wind_gust, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_bearing").c_str(), String(tx22_frame.wind_direction, 0).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_direction").c_str(), GetWindDirectionText(tx22_frame.wind_direction));
+                
+                String state = "{\"RSSI\": " + String(rssi) + 
+                              ", \"batlo\": " + String(tx22_frame.batlo ? "true" : "false") + 
+                              ", \"type\": \"TX22IT\"}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                // Battery
+                int batteryPercent = tx22_frame.batlo ? 10 : 100;
+                mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
+                
+                // Home Assistant Discovery
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    pub_hass_config(1, ID, 1);  // Temperature
+                    pub_hass_config(0, ID, 1);  // Humidity
+                    pub_hass_weather_config(0, ID);  // Wind Speed
+                    pub_hass_weather_config(1, ID);  // Wind Direction
+                    pub_hass_weather_config(2, ID);  // Wind Gust
+                    pub_hass_weather_config(5, ID);  // Wind Bearing
+                    pub_hass_battery_config(ID);
+                }
+                
+                frame_valid = true;
+                
+                if (config.debug_mode) {
+                    Serial.printf("[MQTT] TX22IT ID=%d Name=%s\n", ID, sensorIdentifier.c_str());
+                }
+            }
+        }
+        
+        // ========== VERSUCHE EMT7110 PROTOKOLL ==========
+        if (!frame_valid && config.proto_emt7110 && payLoadSize == 9) {
+            EMT7110::Frame emt_frame;
+            emt_frame.rssi = rssi;
+            emt_frame.rate = rate;
+            
+            if (EMT7110::TryHandleData(payload, payLoadSize, &emt_frame)) {
+                EMT7110::DisplayFrame(payload, payLoadSize, &emt_frame);
+                
+                byte ID = emt_frame.ID;
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                // Publish Energy Data
+                mqtt_client.publish((mqttBaseTopic + "power").c_str(), String(emt_frame.power, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "energy").c_str(), String(emt_frame.energy, 3).c_str());
+                
+                String state = "{\"RSSI\": " + String(rssi) + 
+                              ", \"batlo\": " + String(emt_frame.batlo ? "true" : "false") + 
+                              ", \"type\": \"EMT7110\"}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                // Battery
+                int batteryPercent = emt_frame.batlo ? 10 : 100;
+                mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
+                
+                // Home Assistant Discovery würde hier weitere Konfigurationen benötigen
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    pub_hass_battery_config(ID);
+                }
+                
+                frame_valid = true;
+                
+                if (config.debug_mode) {
+                    Serial.printf("[MQTT] EMT7110 ID=%d Name=%s\n", ID, sensorIdentifier.c_str());
+                }
+            }
+        }
+        
+        // ========== VERSUCHE W136 PROTOKOLL ==========
+        if (!frame_valid && config.proto_w136 && payLoadSize == 6) {
+            W136::Frame w136_frame;
+            w136_frame.rssi = rssi;
+            w136_frame.rate = rate;
+            
+            if (W136::TryHandleData(payload, payLoadSize, &w136_frame)) {
+                W136::DisplayFrame(payload, payLoadSize, &w136_frame);
+                
+                byte ID = w136_frame.ID;
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                // Publish Rain Data
+                mqtt_client.publish((mqttBaseTopic + "rain").c_str(), String(w136_frame.rain, 1).c_str());
+                
+                String state = "{\"RSSI\": " + String(rssi) + 
+                              ", \"batlo\": " + String(w136_frame.batlo ? "true" : "false") + 
+                              ", \"type\": \"W136\"}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                // Battery
+                int batteryPercent = w136_frame.batlo ? 10 : 100;
+                mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
+                
+                // Home Assistant Discovery
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    pub_hass_weather_config(3, ID);  // Rain
+                    pub_hass_battery_config(ID);
+                }
+                
+                frame_valid = true;
+                
+                if (config.debug_mode) {
+                    Serial.printf("[MQTT] W136 ID=%d Name=%s\n", ID, sensorIdentifier.c_str());
                 }
             }
         }
