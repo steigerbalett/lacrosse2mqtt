@@ -55,6 +55,9 @@ static const uint8_t LED_BUILTIN = 2;
 #define HASS_CFG_ENERGY (1 << 8)          // NEU
 #define HASS_CFG_PRESSURE (1 << 9)        // NEU
 
+#define BASE_SENSOR_TIMEOUT 300000   // 5 Minuten Basis-Timeout
+#define TIMEOUT_PER_PROTOCOL 60000   // +1 Minute pro aktiviertem Protokoll
+
 struct Cache {
     unsigned long timestamp;
     byte ID;

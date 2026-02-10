@@ -460,9 +460,37 @@ void pub_hass_battery_config(byte ID)
 
 void expire_cache() {
     unsigned long now = millis();
+    
+    // Berechne dynamischen Timeout basierend auf aktivierten Protokollen
+    int active_protocols = 0;
+    if (config.proto_lacrosse) active_protocols++;
+    if (config.proto_tx35it) active_protocols++;
+    if (config.proto_tx38it) active_protocols++;
+    if (config.proto_wh1080) active_protocols++;
+    if (config.proto_ws1600) active_protocols++;
+    if (config.proto_wt440xh) active_protocols++;
+    if (config.proto_tx22it) active_protocols++;
+    if (config.proto_emt7110) active_protocols++;
+    if (config.proto_w136) active_protocols++;
+    if (config.proto_wh24) active_protocols++;
+    if (config.proto_wh25) active_protocols++;
+    
+    // Basis-Timeout: 5 Minuten + 1 Minute pro Protokoll
+    // Mindestens 5 Minuten, maximal 15 Minuten
+    unsigned long sensor_timeout = 300000 + (active_protocols * 60000);
+    if (sensor_timeout > 900000) sensor_timeout = 900000; // Max 15 Minuten
+    
+    if (config.debug_mode && now % 60000 < 100) { // Log alle 60 Sekunden
+        Serial.printf("Cache timeout: %lu ms (%d protocols active)\n", sensor_timeout, active_protocols);
+    }
+    
     for (int i = 0; i < SENSOR_NUM; i++) {
         // Kanal 1 Daten
-        if (fcache[i].timestamp > 0 && now - fcache[i].timestamp > 300000) {
+        if (fcache[i].timestamp > 0 && now - fcache[i].timestamp > sensor_timeout) {
+            if (config.debug_mode) {
+                Serial.printf("Expiring sensor ID %d (age: %lu ms)\n", fcache[i].ID, now - fcache[i].timestamp);
+            }
+            
             fcache[i].timestamp = 0;
             fcache[i].temp = 0;
             fcache[i].humi = 0;
@@ -479,7 +507,10 @@ void expire_cache() {
         }
         
         // Kanal 2 Daten
-        if (fcache[i].timestamp_ch2 > 0 && now - fcache[i].timestamp_ch2 > 300000) {
+        if (fcache[i].timestamp_ch2 > 0 && now - fcache[i].timestamp_ch2 > sensor_timeout) {
+            if (config.debug_mode) {
+                Serial.printf("Expiring sensor ID %d CH2 (age: %lu ms)\n", fcache[i].ID, now - fcache[i].timestamp_ch2);
+            }
             fcache[i].timestamp_ch2 = 0;
             fcache[i].temp_ch2 = 0;
         }

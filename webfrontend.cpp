@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <rom/rtc.h>
 #include "WiFi.h"
+#include "update_check.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
@@ -308,6 +309,61 @@ bool save_idmap()
     return true;
 }
 
+void handle_check_update() {
+    String response;
+    
+    if (updateCheckInProgress) {
+        response = "{\"status\":\"checking\"}";
+    } else {
+        bool success = checkForUpdate();
+        
+        if (success) {
+            JsonDocument doc;
+            doc["status"] = "success";
+            doc["available"] = updateInfo.available;
+            doc["currentVersion"] = updateInfo.currentVersion;
+            doc["latestVersion"] = updateInfo.latestVersion;
+            doc["downloadUrl"] = updateInfo.downloadUrl;
+            doc["fileSize"] = updateInfo.fileSize;
+            doc["publishedAt"] = updateInfo.publishedAt;
+            doc["releaseNotes"] = updateInfo.releaseNotes;
+            
+            serializeJson(doc, response);
+        } else {
+            response = "{\"status\":\"error\",\"message\":\"Failed to check for updates\"}";
+        }
+    }
+    
+    server.send(200, "application/json", response);
+}
+
+void handle_install_update() {
+    if (updateInstallInProgress) {
+        server.send(409, "application/json", "{\"status\":\"error\",\"message\":\"Update already in progress\"}");
+        return;
+    }
+    
+    if (!updateInfo.available || updateInfo.downloadUrl.isEmpty()) {
+        server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"No update available\"}");
+        return;
+    }
+    
+    server.send(200, "application/json", "{\"status\":\"started\",\"message\":\"Update installation started\"}");
+    
+    // Starte Update in separatem Task
+    installUpdate();
+}
+
+void handle_update_progress() {
+    JsonDocument doc;
+    doc["inProgress"] = updateInstallInProgress;
+    doc["progress"] = updateProgress;
+    
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
+}
+
 void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
@@ -349,7 +405,7 @@ void add_current_table(String &s, bool rawdata)
     s += "<table id='sensor-table'>\n";
     s += "<thead><tr>";
     s += "<th>ID</th>";
-    s += "<th>Ch</th>";
+//    s += "<th>Ch</th>";
     s += "<th>Type</th>";
     s += "<th>Temperature</th>";
     
@@ -408,7 +464,7 @@ void add_current_table(String &s, bool rawdata)
         s += "<td>" + String(displayID) + "</td>";
         
         // Channel
-        s += "<td>" + String(fcache[i].channel) + "</td>";
+//        s += "<td>" + String(fcache[i].channel) + "</td>";
         
         // Type
         s += "<td>" + sensorType + "</td>";
@@ -737,6 +793,67 @@ static void add_header(String &s, const String &title)
     "function startAutoRefresh(){if(refreshTimer)clearInterval(refreshTimer);"
     "refreshTimer=setInterval(updateSensorData,refreshInterval);}"
     "window.addEventListener('DOMContentLoaded',()=>{startAutoRefresh();setTimeout(updateSensorData,1000);});"
+    "function checkForUpdate(){"
+"const btn=document.getElementById('check-update-btn');"
+"const details=document.getElementById('update-details');"
+"btn.disabled=true;"
+"btn.textContent='⏳ Checking...';"
+"fetch('/check-update').then(r=>r.json()).then(data=>{"
+"btn.disabled=false;"
+"btn.textContent='Check for Updates';"
+"if(data.status==='success'){"
+"if(data.available){"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+"
+"'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+"
+"'<button onclick=\"installUpdate()\" class=\"action-button\" style=\"background:var(--success-color);margin-top:8px;\">Install Update</button>'+"
+"'</div>';"
+"}else{"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+"
+"'</div>';"
+"}"
+"}else{"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+"
+"'</div>';"
+"}"
+"}).catch(e=>{"
+"btn.disabled=false;"
+"btn.textContent='Check for Updates';"
+"console.error('Error:',e);"
+"});}"
+
+"function installUpdate(){"
+"if(!confirm('The device will restart after the update. Continue?'))return;"
+"document.getElementById('update-details').style.display='none';"
+"document.getElementById('update-progress-container').style.display='block';"
+"fetch('/install-update',{method:'POST'}).then(r=>r.json()).then(data=>{"
+"if(data.status==='started'){"
+"const progressInterval=setInterval(()=>{"
+"fetch('/update-progress').then(r=>r.json()).then(p=>{"
+"const bar=document.getElementById('update-progress-bar');"
+"const text=document.getElementById('update-progress-text');"
+"bar.style.width=p.progress+'%';"
+"text.textContent=p.progress+'%';"
+"if(!p.inProgress){"
+"clearInterval(progressInterval);"
+"text.textContent='Update complete! Rebooting...';"
+"}"
+"});"
+"},500);"
+"}else{"
+"alert('Failed to start update: '+data.message);"
+"document.getElementById('update-progress-container').style.display='none';"
+"}"
+"}).catch(e=>{console.error('Error:',e);alert('Update failed!');});}"
     "</script>";
     }
     
@@ -1929,6 +2046,23 @@ void handle_config() {
     resp += "</p>";
     
     resp += "</div>";
+
+    resp += "<div class='card'>";
+    resp += "<h2>🔄 Firmware Update</h2>";
+    resp += "<p class='info-text'>Current Version: <strong>" + String(LACROSSE2MQTT_VERSION) + "</strong></p>";
+    resp += "<div id='update-status' style='margin: 12px 0;'>";
+    resp += "<button onclick='checkForUpdate()' class='action-button' id='check-update-btn'>Check for Updates</button>";
+    resp += "</div>";
+    resp += "<div id='update-details' style='display: none; margin-top: 12px;'></div>";
+    resp += "<div id='update-progress-container' style='display: none; margin-top: 12px;'>";
+    resp += "<p class='info-text'>Installing update...</p>";
+    resp += "<div style='width: 100%; height: 20px; background: var(--divider-color); border-radius: 10px; overflow: hidden;'>";
+    resp += "<div id='update-progress-bar' style='width: 0%; height: 100%; background: var(--success-color); transition: width 0.3s;'></div>";
+    resp += "</div>";
+    resp += "<p id='update-progress-text' class='info-text' style='text-align: center; margin-top: 4px;'>0%</p>";
+    resp += "</div>";
+    resp += "</div>";
+
     resp += "</div>";
     
     resp += "<div class='card card-full'>";
@@ -2413,11 +2547,14 @@ void setup_web()
     
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
-    server.on("/sensors.json", handle_sensors_json);  // NEU!
+    server.on("/sensors.json", handle_sensors_json);
     server.on("/config.html", handle_config);
     server.on("/debug.html", handle_debug);
     server.on("/licenses.html", handle_licenses);
     server.on("/update", HTTP_GET, handle_update_page);
+    server.on("/check-update", handle_check_update);
+    server.on("/install-update", HTTP_POST, handle_install_update);
+    server.on("/update-progress", handle_update_progress);
     
     server.onNotFound([]() {
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
