@@ -7,7 +7,7 @@
 #include <Update.h>
 
 // GitHub Repository Info
-#define GITHUB_REPO_OWNER "steigerballett"
+#define GITHUB_REPO_OWNER "steigerbalett"
 #define GITHUB_REPO_NAME "lacrosse2mqtt"
 #define GITHUB_API_URL "https://api.github.com/repos/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME "/releases/latest"
 
@@ -70,7 +70,7 @@ bool checkForUpdate() {
         // Setze GitHub Root CA Zertifikat
         client->setCACert(github_root_ca);
         
-        // Oder verwende das Bundle (einfacher, aber größer):
+        // Verwende das Bundle (größer):
         // client->setCACertBundle(ca_cert_bundle_start);
         
         HTTPClient http;
@@ -114,13 +114,27 @@ bool checkForUpdate() {
                     }
                     
                     // Vergleiche Versionen
-                    updateInfo.available = (updateInfo.latestVersion != updateInfo.currentVersion) && 
-                                           !updateInfo.downloadUrl.isEmpty();
-                    
-                    Serial.println("Update check completed:");
-                    Serial.println("Current: " + updateInfo.currentVersion);
-                    Serial.println("Latest: " + updateInfo.latestVersion);
-                    Serial.println("Available: " + String(updateInfo.available));
+                    if (updateInfo.latestVersion == updateInfo.currentVersion) {
+                        // ✓ NEU: Gleiche Version erkannt
+                        updateInfo.available = false;
+                        updateInfo.errorMessage = "Kein Update verfügbar";
+                        Serial.println("Update check completed:");
+                        Serial.println("Current: " + updateInfo.currentVersion);
+                        Serial.println("Latest: " + updateInfo.latestVersion);
+                        Serial.println("Kein Update verfügbar");
+                    } else if (!updateInfo.downloadUrl.isEmpty()) {
+                        // Update verfügbar
+                        updateInfo.available = true;
+                        Serial.println("Update check completed:");
+                        Serial.println("Current: " + updateInfo.currentVersion);
+                        Serial.println("Latest: " + updateInfo.latestVersion);
+                        Serial.println("Update available!");
+                    } else {
+                        // Keine .bin Datei gefunden
+                        updateInfo.available = false;
+                        updateInfo.errorMessage = "No .bin file found in release";
+                        Serial.println("No .bin file found in latest release");
+                    }
                     
                     http.end();
                     delete client;
