@@ -125,7 +125,7 @@ bool load_config()
     config.proto_tx38it = false;
     config.proto_tx35it = true;
     config.proto_ws1600 = false;
-    config.proto_wt440xh = true;
+    config.proto_wt440xh = false;
     config.proto_w136 = false;
     
     if (!littlefs_ok)
@@ -315,7 +315,7 @@ void handle_check_update() {
     if (updateCheckInProgress) {
         response = "{\"status\":\"checking\"}";
     } else {
-        bool success = checkForUpdate();
+        bool success = checkForUpdate(false);  // Versuche zuerst mit Certificate Bundle
         
         if (success) {
             JsonDocument doc;
@@ -327,6 +327,16 @@ void handle_check_update() {
             doc["fileSize"] = updateInfo.fileSize;
             doc["publishedAt"] = updateInfo.publishedAt;
             doc["releaseNotes"] = updateInfo.releaseNotes;
+            doc["certBundleFailed"] = false;
+            
+            serializeJson(doc, response);
+        } else if (updateInfo.requiresUserConfirmation) {
+            // Certificate Bundle fehlgeschlagen - Benutzerbestätigung erforderlich
+            JsonDocument doc;
+            doc["status"] = "cert_failed";
+            doc["message"] = "Certificate validation failed";
+            doc["requiresConfirmation"] = true;
+            doc["errorMessage"] = updateInfo.errorMessage;
             
             serializeJson(doc, response);
         } else {
@@ -354,6 +364,23 @@ void handle_install_update() {
     installUpdate();
 }
 
+void handle_install_update_insecure() {
+    if (updateInstallInProgress) {
+        server.send(409, "application/json", "{\"status\":\"error\",\"message\":\"Update already in progress\"}");
+        return;
+    }
+    
+    if (!updateInfo.available || updateInfo.downloadUrl.isEmpty()) {
+        server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"No update available\"}");
+        return;
+    }
+    
+    server.send(200, "application/json", "{\"status\":\"started\",\"message\":\"Update installation started (insecure mode)\"}");
+    
+    // Starte Update mit forceInsecure=true
+    installUpdate(true);
+}
+
 void handle_update_progress() {
     JsonDocument doc;
     doc["inProgress"] = updateInstallInProgress;
@@ -361,6 +388,36 @@ void handle_update_progress() {
     
     String response;
     serializeJson(doc, response);
+    server.send(200, "application/json", response);
+}
+
+void handle_check_update_insecure() {
+    String response;
+    
+    if (updateCheckInProgress) {
+        response = "{\"status\":\"checking\"}";
+    } else {
+        // Rufe checkForUpdate mit forceInsecure=true auf
+        bool success = checkForUpdate(true);
+        
+        if (success) {
+            JsonDocument doc;
+            doc["status"] = "success";
+            doc["available"] = updateInfo.available;
+            doc["currentVersion"] = updateInfo.currentVersion;
+            doc["latestVersion"] = updateInfo.latestVersion;
+            doc["downloadUrl"] = updateInfo.downloadUrl;
+            doc["fileSize"] = updateInfo.fileSize;
+            doc["publishedAt"] = updateInfo.publishedAt;
+            doc["releaseNotes"] = updateInfo.releaseNotes;
+            doc["insecureMode"] = true;
+            
+            serializeJson(doc, response);
+        } else {
+            response = "{\"status\":\"error\",\"message\":\"Failed to check for updates\"}";
+        }
+    }
+    
     server.send(200, "application/json", response);
 }
 
@@ -793,67 +850,156 @@ static void add_header(String &s, const String &title)
     "function startAutoRefresh(){if(refreshTimer)clearInterval(refreshTimer);"
     "refreshTimer=setInterval(updateSensorData,refreshInterval);}"
     "window.addEventListener('DOMContentLoaded',()=>{startAutoRefresh();setTimeout(updateSensorData,1000);});"
-    "function checkForUpdate(){"
-"const btn=document.getElementById('check-update-btn');"
-"const details=document.getElementById('update-details');"
-"btn.disabled=true;"
-"btn.textContent='⏳ Checking...';"
-"fetch('/check-update').then(r=>r.json()).then(data=>{"
-"btn.disabled=false;"
-"btn.textContent='Check for Updates';"
-"if(data.status==='success'){"
-"if(data.available){"
-"details.style.display='block';"
-"details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+"
-"'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+"
-"'<button onclick=\"installUpdate()\" class=\"action-button\" style=\"background:var(--success-color);margin-top:8px;\">Install Update</button>'+"
-"'</div>';"
-"}else{"
-"details.style.display='block';"
-"details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+"
-"'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+"
-"'</div>';"
-"}"
-"}else{"
-"details.style.display='block';"
-"details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+"
-"'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+"
-"'</div>';"
-"}"
-"}).catch(e=>{"
-"btn.disabled=false;"
-"btn.textContent='Check for Updates';"
-"console.error('Error:',e);"
-"});}"
+        "function checkForUpdate(){"
+    "const btn=document.getElementById('check-update-btn');"
+    "const details=document.getElementById('update-details');"
+    "btn.disabled=true;"
+    "btn.textContent='⏳ Checking...';"
+    "fetch('/check-update').then(r=>r.json()).then(data=>{"
+    "btn.disabled=false;"
+    "btn.textContent='Check for Updates';"
+    "if(data.status==='success'){"
+    "if(data.available){"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+\n"
+    "'<button onclick=\"installUpdate()\" class=\"action-button\" style=\"background:var(--success-color);margin-top:8px;\">Install Update</button>'+\n"
+    "'</div>';"
+    "}else{"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+\n"
+    "'</div>';"
+    "}"
+    "}else if(data.status==='cert_failed'){"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:16px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Certificate Validation Failed</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:12px;color:var(--primary-text-color);\">The secure connection to GitHub could not be established because certificate validation failed.</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:12px;color:var(--primary-text-color);\"><strong>Do you want to proceed without certificate validation?</strong></p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">⚠️ Warning: This will disable SSL certificate verification. The connection will still be encrypted, but the server identity cannot be verified.</p>'+\n"
+    "'<div style=\"margin-top:12px;display:flex;gap:8px;\">'+\n"
+    "'<button onclick=\"checkForUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);\">⚠️ Proceed Without Validation</button>'+\n"
+    "'<button onclick=\"cancelInsecureUpdate()\" class=\"action-button\" style=\"background:var(--error-color);\">✗ Cancel</button>'+\n"
+    "'</div>'+\n"
+    "'</div>';"
+    "}else{"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+\n"
+    "'</div>';"
+    "}"
+    "}).catch(e=>{"
+    "btn.disabled=false;"
+    "btn.textContent='Check for Updates';"
+    "console.error('Error:',e);"
+    "});"
+    "}\n"
+    
+    "function checkForUpdateInsecure(){"
+    "const btn=document.getElementById('check-update-btn');"
+    "const details=document.getElementById('update-details');"
+    "details.innerHTML='<p style=\"text-align:center;color:var(--warning-color);\">⏳ Checking without certificate validation...</p>';"
+    "fetch('/check-update-insecure').then(r=>r.json()).then(data=>{"
+    "if(data.status==='success'){"
+    "if(data.available){"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:11px;color:var(--warning-color);\">⚠️ Connection established without certificate validation</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+\n"
+    "'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+\n"
+    "'<button onclick=\"installUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⚠️ Install Update (Insecure)</button>'+\n"
+    "'</div>';"
+    "}else{"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+\n"
+    "'</div>';"
+    "}"
+    "}else{"
+    "details.style.display='block';"
+    "details.innerHTML="
+    "'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+\n"
+    "'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+\n"
+    "'</div>';"
+    "}"
+    "}).catch(e=>{"
+    "console.error('Error:',e);"
+    "});"
+    "}\n"
+    
+    "function cancelInsecureUpdate(){"
+    "const details=document.getElementById('update-details');"
+    "details.style.display='none';"
+    "}\n"
+    
+    "function installUpdate(){"
+    "if(!confirm('The device will restart after the update. Continue?'))return;"
+    "document.getElementById('update-details').style.display='none';"
+    "document.getElementById('update-progress-container').style.display='block';"
+    "fetch('/install-update',{method:'POST'}).then(r=>r.json()).then(data=>{"
+    "if(data.status==='started'){"
+    "const progressInterval=setInterval(()=>{"
+    "fetch('/update-progress').then(r=>r.json()).then(p=>{"
+    "const bar=document.getElementById('update-progress-bar');"
+    "const text=document.getElementById('update-progress-text');"
+    "bar.style.width=p.progress+'%';"
+    "text.textContent=p.progress+'%';"
+    "if(!p.inProgress){"
+    "clearInterval(progressInterval);"
+    "text.textContent='Update complete! Rebooting...';"
+    "}"
+    "});"
+    "},500);"
+    "}else{"
+    "alert('Failed to start update: '+data.message);"
+    "document.getElementById('update-progress-container').style.display='none';"
+    "}"
+    "}).catch(e=>{"
+    "console.error('Error:',e);"
+    "alert('Update failed!');"
+    "});"
+    "}\n"
+    
+    "function installUpdateInsecure(){"
+    "if(!confirm('⚠️ WARNING: You are about to install a firmware update without certificate validation.\\n\\n"
+    "The server identity cannot be verified. Only proceed if you trust the source.\\n\\n"
+    "The device will restart after the update. Continue?'))return;"
+    "document.getElementById('update-details').style.display='none';"
+    "document.getElementById('update-progress-container').style.display='block';"
+    "fetch('/install-update-insecure',{method:'POST'}).then(r=>r.json()).then(data=>{"
+    "if(data.status==='started'){"
+    "const progressInterval=setInterval(()=>{"
+    "fetch('/update-progress').then(r=>r.json()).then(p=>{"
+    "const bar=document.getElementById('update-progress-bar');"
+    "const text=document.getElementById('update-progress-text');"
+    "bar.style.width=p.progress+'%';"
+    "text.textContent=p.progress+'%';"
+    "if(!p.inProgress){"
+    "clearInterval(progressInterval);"
+    "text.textContent='Update complete! Rebooting...';"
+    "}"
+    "});"
+    "},500);"
+    "}else{"
+    "alert('Failed to start update: '+data.message);"
+    "document.getElementById('update-progress-container').style.display='none';"
+    "}"
+    "}).catch(e=>{"
+    "console.error('Error:',e);"
+    "alert('Update failed!');"
+    "});"
+    "}"
 
-"function installUpdate(){"
-"if(!confirm('The device will restart after the update. Continue?'))return;"
-"document.getElementById('update-details').style.display='none';"
-"document.getElementById('update-progress-container').style.display='block';"
-"fetch('/install-update',{method:'POST'}).then(r=>r.json()).then(data=>{"
-"if(data.status==='started'){"
-"const progressInterval=setInterval(()=>{"
-"fetch('/update-progress').then(r=>r.json()).then(p=>{"
-"const bar=document.getElementById('update-progress-bar');"
-"const text=document.getElementById('update-progress-text');"
-"bar.style.width=p.progress+'%';"
-"text.textContent=p.progress+'%';"
-"if(!p.inProgress){"
-"clearInterval(progressInterval);"
-"text.textContent='Update complete! Rebooting...';"
-"}"
-"});"
-"},500);"
-"}else{"
-"alert('Failed to start update: '+data.message);"
-"document.getElementById('update-progress-container').style.display='none';"
-"}"
-"}).catch(e=>{console.error('Error:',e);alert('Update failed!');});}"
     "</script>";
     }
     
@@ -2553,7 +2699,9 @@ void setup_web()
     server.on("/licenses.html", handle_licenses);
     server.on("/update", HTTP_GET, handle_update_page);
     server.on("/check-update", handle_check_update);
+    server.on("/check-update-insecure", handle_check_update_insecure);
     server.on("/install-update", HTTP_POST, handle_install_update);
+    server.on("/install-update-insecure", HTTP_POST, handle_install_update_insecure);
     server.on("/update-progress", handle_update_progress);
     
     server.onNotFound([]() {
