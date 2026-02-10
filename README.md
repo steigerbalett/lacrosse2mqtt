@@ -6,6 +6,9 @@ This is a gateway to receive temperature and humidity from (868 MHz)
  * TX38IT - indoor temperature sensors
  * WS1600 - Weatherstations
  * WT440XH - temperature + humidity sensors
+ * TX22IT - Weatherstations
+ * W136 - Weatherstations
+ * EMT7110 - Energy
 
 and publish them to a MQTT broker.
 
@@ -62,7 +65,6 @@ The following libraries are needed for building (could all be installed via ardu
 ## Nice2have
  * Add FHEM connector
  * Add update checker and online update
- * Maybe try to decode more sensors
 
 ## Source/Idea
 This project uses code and protocol descriptions derived from

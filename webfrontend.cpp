@@ -310,6 +310,39 @@ void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
     
+    // SCHRITT 1: Prüfe welche Datentypen überhaupt vorhanden sind
+    bool hasTempCh2 = false;
+    bool hasHumidity = false;
+    bool hasWindSpeed = false;
+    bool hasWindDir = false;
+    bool hasWindGust = false;
+    bool hasRain = false;
+    bool hasPower = false;
+    bool hasPressure = false;
+    
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
+            continue;
+            
+        if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100)
+            hasTempCh2 = true;
+        if (fcache[i].humi > 0 && fcache[i].humi <= 100)
+            hasHumidity = true;
+        if (fcache[i].wind_speed > 0)
+            hasWindSpeed = true;
+        if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360)
+            hasWindDir = true;
+        if (fcache[i].wind_gust > 0)
+            hasWindGust = true;
+        if (fcache[i].rain_total > 0)
+            hasRain = true;
+        if (fcache[i].power > 0)
+            hasPower = true;
+        if (fcache[i].pressure > 0)
+            hasPressure = true;
+    }
+    
+    // SCHRITT 2: Baue Tabellenkopf dynamisch
     s += "<h2>Current sensor data</h2>\n";
     s += "<table id='sensor-table'>\n";
     s += "<thead><tr>";
@@ -317,34 +350,42 @@ void add_current_table(String &s, bool rawdata)
     s += "<th>Ch</th>";
     s += "<th>Type</th>";
     s += "<th>Temperature</th>";
-    s += "<th>Temp 2</th>";
-    s += "<th>Humidity</th>";
-    s += "<th>Wind Speed</th>";        // NEU
-    s += "<th>Wind Dir</th>";          // NEU
-    s += "<th>Wind Gust</th>";         // NEU
-    s += "<th>Rain</th>";              // NEU
-    s += "<th>Power</th>";             // NEU
-    s += "<th>Pressure</th>";          // NEU
+    
+    if (hasTempCh2)
+        s += "<th>Temp 2</th>";
+    if (hasHumidity)
+        s += "<th>Humidity</th>";
+    if (hasWindSpeed)
+        s += "<th>Wind Speed</th>";
+    if (hasWindDir)
+        s += "<th>Wind Dir</th>";
+    if (hasWindGust)
+        s += "<th>Wind Gust</th>";
+    if (hasRain)
+        s += "<th>Rain</th>";
+    if (hasPower)
+        s += "<th>Power</th>";
+    if (hasPressure)
+        s += "<th>Pressure</th>";
+    
     s += "<th>RSSI</th>";
     s += "<th>Name</th>";
     s += "<th>Age (ms)</th>";
     s += "<th>Battery</th>";
     s += "<th>New Batt</th>";
+    
     if (rawdata)
         s += "<th>Raw Frame Data</th>";
+    
     s += "</tr></thead>\n";
     s += "<tbody id='sensor-tbody'>\n";
 
     int sensorCount = 0;
     
+    // SCHRITT 3: Baue Tabellenzeilen dynamisch
     for (int i = 0; i < SENSOR_NUM; i++)
     {
-        // Überspringe leere Einträge
-        if (fcache[i].timestamp == 0)
-            continue;
-        
-        // Überspringe ungültige IDs
-        if (fcache[i].ID == 0xFF)
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
             continue;
             
         sensorCount++;
@@ -353,10 +394,8 @@ void add_current_table(String &s, bool rawdata)
         if (name.length() == 0)
             name = "-";
 
-        // ID ist die Originale
         int displayID = fcache[i].ID;
         
-        // Sensor-Typ aus Cache
         String sensorType = String(fcache[i].sensorType);
         if (sensorType.length() == 0)
             sensorType = "LaCrosse";
@@ -372,65 +411,79 @@ void add_current_table(String &s, bool rawdata)
         // Type
         s += "<td>" + sensorType + "</td>";
 
-        // Temperatur 1
+        // Temperatur 1 (immer anzeigen)
         s += "<td>" + String(fcache[i].temp, 1) + " °C</td>";
 
-        // Temperatur 2
-        // Prüfe ob ein zweiter Temperaturwert existiert
-        // Falls nicht verfügbar, zeige "-"
-        if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
-            s += "<td>" + String(fcache[i].temp_ch2, 1) + " °C</td>";
-        } else {
-            s += "<td>-</td>";
+        // Temperatur 2 (nur wenn Spalte sichtbar)
+        if (hasTempCh2) {
+            if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
+                s += "<td>" + String(fcache[i].temp_ch2, 1) + " °C</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
-        // Luftfeuchtigkeit
-        if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
-            s += "<td>" + String(fcache[i].humi) + " %</td>";
-        } else {
-            s += "<td>-</td>";
-        }
-        
-        // Wind Speed
-        if (fcache[i].wind_speed > 0) {
-            s += "<td>" + String(fcache[i].wind_speed, 1) + " km/h</td>";
-        } else {
-            s += "<td>-</td>";
+        // Luftfeuchtigkeit (nur wenn Spalte sichtbar)
+        if (hasHumidity) {
+            if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
+                s += "<td>" + String(fcache[i].humi) + " %</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
-        // Wind Direction
-        if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360) {
-            s += "<td>" + String(fcache[i].wind_direction) + "°</td>";
-        } else {
-            s += "<td>-</td>";
+        // Wind Speed (nur wenn Spalte sichtbar)
+        if (hasWindSpeed) {
+            if (fcache[i].wind_speed > 0) {
+                s += "<td>" + String(fcache[i].wind_speed, 1) + " km/h</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
-        // Wind Gust
-        if (fcache[i].wind_gust > 0) {
-            s += "<td>" + String(fcache[i].wind_gust) + " km/h</td>";
-        } else {
-            s += "<td>-</td>";
+        // Wind Direction (nur wenn Spalte sichtbar)
+        if (hasWindDir) {
+            if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360) {
+                s += "<td>" + String(fcache[i].wind_direction) + "°</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
-        // Rain
-        if (fcache[i].rain > 0 || fcache[i].rain_total > 0) {
-            s += "<td>" + String(fcache[i].rain_total, 1) + " mm</td>";
-        } else {
-            s += "<td>-</td>";
+        // Wind Gust (nur wenn Spalte sichtbar)
+        if (hasWindGust) {
+            if (fcache[i].wind_gust > 0) {
+                s += "<td>" + String(fcache[i].wind_gust) + " km/h</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
-        // Power (EMT7110)
-        if (fcache[i].power > 0) {
-            s += "<td>" + String(fcache[i].power, 1) + " W</td>";
-        } else {
-            s += "<td>-</td>";
+        // Rain (nur wenn Spalte sichtbar)
+        if (hasRain) {
+            if (fcache[i].rain_total > 0) {
+                s += "<td>" + String(fcache[i].rain_total, 1) + " mm</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
-        // Pressure (WH24/WH25)
-        if (fcache[i].pressure > 0) {
-            s += "<td>" + String(fcache[i].pressure, 1) + " hPa</td>";
-        } else {
-            s += "<td>-</td>";
+        // Power (nur wenn Spalte sichtbar)
+        if (hasPower) {
+            if (fcache[i].power > 0) {
+                s += "<td>" + String(fcache[i].power, 1) + " W</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Pressure (nur wenn Spalte sichtbar)
+        if (hasPressure) {
+            if (fcache[i].pressure > 0) {
+                s += "<td>" + String(fcache[i].pressure, 1) + " hPa</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
         // RSSI
@@ -443,7 +496,7 @@ void add_current_table(String &s, bool rawdata)
         unsigned long age = now - fcache[i].timestamp;
         s += "<td>" + String(age) + "</td>";
 
-        // Battery mit Farbe
+        // Battery
         if (fcache[i].batlo) {
             s += "<td class='batt-weak'>weak</td>";
         } else {
@@ -461,12 +514,12 @@ void add_current_table(String &s, bool rawdata)
         if (rawdata) {
             s += "<td class='raw-data'>0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
-            char tmp[3];
-            snprintf(tmp, 3, "%02X", fcache[i].data[j]);
-            s += String(tmp);
-        if (j < FRAME_LENGTH - 1)
-            s += " ";
-}
+                char tmp[3];
+                snprintf(tmp, 3, "%02X", fcache[i].data[j]);
+                s += String(tmp);
+                if (j < FRAME_LENGTH - 1)
+                    s += " ";
+            }
             s += "</td>";
         }
 
@@ -588,126 +641,62 @@ static void add_header(String &s, const String &title)
     
     if (title.indexOf("Gateway") > -1 || title.indexOf("Configuration") > -1) {
         s += "<script>"
-             "let autoRefreshEnabled = true;"
-             "let refreshInterval = 5000;"
-             "let refreshTimer;"
-             
-             "function updateSensorData() {"
-             "  if (!autoRefreshEnabled) return;"
-             "  fetch('/sensors.json')"
-             "    .then(response => response.json())"
-             "    .then(data => {"
-             "      const tbody = document.getElementById('sensor-tbody');"
-             "      if (tbody) {"
-             "        tbody.innerHTML = '';"
-             "        data.sensors.forEach(sensor => {"
-             "          const row = tbody.insertRow();"
-             "          row.innerHTML = '<td>' + sensor.id + '</td>' +"  // ← String-Konkatenation statt Template
-             "            '<td>' + sensor.ch + '</td>' +"
-             "            '<td>' + sensor.type + '</td>' +"
-             "            '<td>' + sensor.temp + ' °C</td>' +"
-             "            '<td>' + (sensor.temp2 !== null ? sensor.temp2 + ' °C' : '-') + '</td>' +"
-             "            '<td>' + (sensor.humi > 0 && sensor.humi <= 100 ? sensor.humi + ' %' : '-') + '</td>' +"
-             "            '<td>' + (sensor.wind_speed !== null ? sensor.wind_speed + ' km/h' : '-') + '</td>' +"
-             "            '<td>' + (sensor.wind_dir !== null ? sensor.wind_dir + '°' : '-') + '</td>' +"
-             "            '<td>' + (sensor.wind_gust !== null ? sensor.wind_gust + ' km/h' : '-') + '</td>' +"
-             "            '<td>' + (sensor.rain !== null ? sensor.rain + ' mm' : '-') + '</td>' +"
-             "            '<td>' + (sensor.power !== null ? sensor.power + ' W' : '-') + '</td>' +"
-             "            '<td>' + (sensor.pressure !== null ? sensor.pressure + ' hPa' : '-') + '</td>' +"         
-             "            '<td>' + sensor.rssi + '</td>' +"
-             "            '<td>' + (sensor.name || '-') + '</td>' +"
-             "            '<td>' + sensor.age + '</td>' +"
-             "            '<td class=\"' + (sensor.batlo ? 'batt-weak' : 'batt-ok') + '\">' + (sensor.batlo ? 'weak' : 'ok') + '</td>' +"
-             "            '<td class=\"' + (sensor.init ? 'init-new' : 'init-no') + '\">' + (sensor.init ? 'yes' : 'no') + '</td>' +"
-             "            '<td class=\"raw-data\">0x' + sensor.raw + '</td>';"
-             "        });"
-             "      }"
-             "      const systemStatus = document.getElementById('system-status');"
-             "      if (systemStatus) {"
-             "        let statusHtml = '';"
-             "        if (data.mqtt_ok) {"
-             "          statusHtml += '<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
-             "        } else {"
-             "          statusHtml += '<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
-             "        }"
-             "        if (data.wifi_ok) {"
-             "          statusHtml += '<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
-             "        } else {"
-             "          statusHtml += '<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';"
-             "        }"
-             "        systemStatus.innerHTML = statusHtml;"
-             "      }"
-             "      const wifiSsid = document.getElementById('wifi-ssid');"
-             "      if (wifiSsid && data.wifi_ssid) {"
-             "        wifiSsid.textContent = 'SSID: ' + data.wifi_ssid;"
-             "      }"
-             "      const wifiIp = document.getElementById('wifi-ip');"
-             "      if (wifiIp && data.wifi_ip) {"
-             "        wifiIp.textContent = 'IP: ' + data.wifi_ip;"
-             "      }"
-             "      const uptime = document.getElementById('system-uptime');"
-             "      if (uptime && data.uptime) {"
-             "        uptime.textContent = 'Uptime: ' + data.uptime;"
-             "      }"
-             "      const cpuLoad = document.getElementById('cpu-load');"
-             "      if (cpuLoad && data.cpu_usage) {"
-             "        cpuLoad.textContent = 'CPU Load: ' + data.cpu_usage + '%';"
-             "      }"
-             "      const countElem = document.getElementById('sensor-count');"
-             "      if (countElem) {"
-             "        if (data.count === 0) {"
-             "          countElem.innerHTML = '<em>No sensors found. Waiting for data...</em>';"
-             "        } else {"
-             "          countElem.innerHTML = '<em>Total sensors: ' + data.count + ' | Last update: ' + new Date().toLocaleTimeString() + '</em>';"
-             "        }"
-             "      }"
-             "      const refreshStatus = document.getElementById('refresh-status');"
-             "      if (refreshStatus) {"
-             "        refreshStatus.textContent = '✓ Live (updated ' + new Date().toLocaleTimeString() + ')';"
-             "        refreshStatus.style.color = 'var(--success-color)';"
-             "      }"
-             "    })"
-             "    .catch(error => {"
-             "      console.error('Error:', error);"
-             "      const refreshStatus = document.getElementById('refresh-status');"
-             "      if (refreshStatus) {"
-             "        refreshStatus.textContent = '✗ Error';"
-             "        refreshStatus.style.color = 'var(--error-color)';"
-             "      }"
-             "    });"
-             "}"
-
-             "function toggleAutoRefresh() {"
-             "  autoRefreshEnabled = !autoRefreshEnabled;"
-             "  const btn = document.getElementById('auto-refresh-btn');"
-             "  const status = document.getElementById('refresh-status');"
-             "  "
-             "  if (autoRefreshEnabled) {"
-             "    btn.textContent = '⏸️ Pause Auto-Refresh';"
-             "    btn.style.backgroundColor = 'var(--warning-color)';"
-             "    status.textContent = '⏳ Starting...';"
-             "    status.style.color = 'var(--info-color)';"
-             "    startAutoRefresh();"
-             "    updateSensorData();"
-             "  } else {"
-             "    btn.textContent = '▶️ Resume Auto-Refresh';"
-             "    btn.style.backgroundColor = 'var(--success-color)';"
-             "    status.textContent = '⏸️ Paused';"
-             "    status.style.color = 'var(--warning-color)';"
-             "    if (refreshTimer) clearInterval(refreshTimer);"
-             "  }"
-             "}"
-             
-             "function startAutoRefresh() {"
-             "  if (refreshTimer) clearInterval(refreshTimer);"
-             "  refreshTimer = setInterval(updateSensorData, refreshInterval);"
-             "}"
-             
-             "window.addEventListener('DOMContentLoaded', () => {"
-             "  startAutoRefresh();"
-             "  setTimeout(updateSensorData, 1000);"
-             "});"
-             "</script>";
+     "let autoRefreshEnabled=true,refreshInterval=5000,refreshTimer;"
+     "function updateSensorData(){"
+     "if(!autoRefreshEnabled)return;"
+     "fetch('/sensors.json').then(r=>r.json()).then(data=>{"
+     "let hasTempCh2=false,hasHumidity=false,hasWindSpeed=false,hasWindDir=false,hasWindGust=false,hasRain=false,hasPower=false,hasPressure=false;"
+     "data.sensors.forEach(s=>{if(s.temp2!==null)hasTempCh2=true;if(s.humi>0&&s.humi<=100)hasHumidity=true;"
+     "if(s.wind_speed!==null)hasWindSpeed=true;if(s.wind_dir!==null && s.wind_dir>=0 && s.wind_dir<=360)hasWindDir=true;if(s.wind_gust!==null)hasWindGust=true;"
+     "if(s.rain!==null)hasRain=true;if(s.power!==null)hasPower=true;if(s.pressure!==null)hasPressure=true;});"
+     "const t=document.getElementById('sensor-table');if(t){const h=t.querySelector('thead tr');if(h){"
+     "let hh='<th>ID</th><th>Ch</th><th>Type</th><th>Temperature</th>';"
+     "if(hasTempCh2)hh+='<th>Temp 2</th>';if(hasHumidity)hh+='<th>Humidity</th>';"
+     "if(hasWindSpeed)hh+='<th>Wind Speed</th>';if(hasWindDir)hh+='<th>Wind Dir</th>';"
+     "if(hasWindGust)hh+='<th>Wind Gust</th>';if(hasRain)hh+='<th>Rain</th>';"
+     "if(hasPower)hh+='<th>Power</th>';if(hasPressure)hh+='<th>Pressure</th>';"
+     "hh+='<th>RSSI</th><th>Name</th><th>Age (ms)</th><th>Battery</th><th>New Batt</th><th>Raw Frame Data</th>';"
+     "h.innerHTML=hh;}}"
+     "const b=document.getElementById('sensor-tbody');if(b){b.innerHTML='';data.sensors.forEach(s=>{"
+     "const r=b.insertRow();let rh='<td>'+s.id+'</td><td>'+s.ch+'</td><td>'+s.type+'</td><td>'+s.temp+' °C</td>';"
+     "if(hasTempCh2)rh+='<td>'+(s.temp2!==null?s.temp2+' °C':'-')+'</td>';"
+     "if(hasHumidity)rh+='<td>'+(s.humi>0&&s.humi<=100?s.humi+' %':'-')+'</td>';"
+     "if(hasWindSpeed)rh+='<td>'+(s.wind_speed!==null?s.wind_speed+' km/h':'-')+'</td>';"
+     "if(hasWindDir)rh+='<td>'+(s.wind_dir!==null && s.wind_dir>=0?s.wind_dir+'°':'-')+'</td>';"
+     "if(hasWindGust)rh+='<td>'+(s.wind_gust!==null?s.wind_gust+' km/h':'-')+'</td>';"
+     "if(hasRain)rh+='<td>'+(s.rain!==null?s.rain+' mm':'-')+'</td>';"
+     "if(hasPower)rh+='<td>'+(s.power!==null?s.power+' W':'-')+'</td>';"
+     "if(hasPressure)rh+='<td>'+(s.pressure!==null?s.pressure+' hPa':'-')+'</td>';"
+     "rh+='<td>'+s.rssi+'</td><td>'+(s.name||'-')+'</td><td>'+s.age+'</td>'+"
+     "'<td class=\"'+(s.batlo?'batt-weak':'batt-ok')+'\">'+(s.batlo?'weak':'ok')+'</td>'+"
+     "'<td class=\"'+(s.init?'init-new':'init-no')+'\">'+(s.init?'yes':'no')+'</td>'+"
+     "'<td class=\"raw-data\">0x'+s.raw+'</td>';r.innerHTML=rh;});}"
+     "const ss=document.getElementById('system-status');if(ss){"
+     "let sh='';if(data.mqtt_ok)sh+='<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
+     "else sh+='<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
+     "if(data.wifi_ok)sh+='<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
+     "else sh+='<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';ss.innerHTML=sh;}"
+     "const ws=document.getElementById('wifi-ssid');if(ws&&data.wifi_ssid)ws.textContent='SSID: '+data.wifi_ssid;"
+     "const wi=document.getElementById('wifi-ip');if(wi&&data.wifi_ip)wi.textContent='IP: '+data.wifi_ip;"
+     "const up=document.getElementById('system-uptime');if(up&&data.uptime)up.textContent='Uptime: '+data.uptime;"
+     "const cl=document.getElementById('cpu-load');if(cl&&data.cpu_usage)cl.textContent='CPU Load: '+data.cpu_usage+'%';"
+     "const ce=document.getElementById('sensor-count');if(ce){"
+     "if(data.count===0)ce.innerHTML='<em>No sensors found. Waiting for data...</em>';"
+     "else ce.innerHTML='<em>Total sensors: '+data.count+' | Last update: '+new Date().toLocaleTimeString()+'</em>';}"
+     "const rs=document.getElementById('refresh-status');if(rs){"
+     "rs.textContent='✓ Live (updated '+new Date().toLocaleTimeString()+')';rs.style.color='var(--success-color)';}}"
+     ").catch(e=>{console.error('Error:',e);const rs=document.getElementById('refresh-status');"
+     "if(rs){rs.textContent='✗ Error';rs.style.color='var(--error-color)';}});}"
+     "function toggleAutoRefresh(){autoRefreshEnabled=!autoRefreshEnabled;"
+     "const btn=document.getElementById('auto-refresh-btn'),st=document.getElementById('refresh-status');"
+     "if(autoRefreshEnabled){btn.textContent='⏸️ Pause Auto-Refresh';btn.style.backgroundColor='var(--warning-color)';"
+     "st.textContent='⏳ Starting...';st.style.color='var(--info-color)';startAutoRefresh();updateSensorData();}"
+     "else{btn.textContent='▶️ Resume Auto-Refresh';btn.style.backgroundColor='var(--success-color)';"
+     "st.textContent='⏸️ Paused';st.style.color='var(--warning-color)';if(refreshTimer)clearInterval(refreshTimer);}}"
+     "function startAutoRefresh(){if(refreshTimer)clearInterval(refreshTimer);"
+     "refreshTimer=setInterval(updateSensorData,refreshInterval);}"
+     "window.addEventListener('DOMContentLoaded',()=>{startAutoRefresh();setTimeout(updateSensorData,1000);});"
+     "</script>";
     }
     
     s += "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"

@@ -450,22 +450,28 @@ void pub_hass_battery_config(byte ID)
     mqtt_client.endPublish();
 }
 
-void expire_cache()
-{
+void expire_cache() {
     unsigned long now = millis();
     for (int i = 0; i < SENSOR_NUM; i++) {
         // Kanal 1 Daten
-        if (fcache[i].timestamp > 0 && (now - fcache[i].timestamp) > 300000) {
+        if (fcache[i].timestamp > 0 && now - fcache[i].timestamp > 300000) {
             fcache[i].timestamp = 0;
             fcache[i].temp = 0;
             fcache[i].humi = 0;
             fcache[i].valid = false;
             fcache[i].batlo = false;
             fcache[i].init = false;
+            fcache[i].wind_speed = 0;
+            fcache[i].wind_direction = -1;
+            fcache[i].wind_gust = 0;
+            fcache[i].rain = 0;
+            fcache[i].rain_total = 0;
+            fcache[i].power = 0;
+            fcache[i].pressure = 0;
         }
         
         // Kanal 2 Daten
-        if (fcache[i].timestamp_ch2 > 0 && (now - fcache[i].timestamp_ch2) > 300000) {
+        if (fcache[i].timestamp_ch2 > 0 && now - fcache[i].timestamp_ch2 > 300000) {
             fcache[i].timestamp_ch2 = 0;
             fcache[i].temp_ch2 = 0;
         }
@@ -710,6 +716,28 @@ void receive()
                 WH1080::DisplayFrame(payload, payLoadSize, &wh_frame);
                 
                 byte ID = wh_frame.ID;
+                int cacheIndex = ID;
+                if (cacheIndex >= 0 && cacheIndex < SENSOR_NUM) {
+                    fcache[cacheIndex].ID = ID;
+                    fcache[cacheIndex].temp = wh_frame.temp;
+                    fcache[cacheIndex].humi = wh_frame.humi;
+                    fcache[cacheIndex].wind_speed = wh_frame.wind_speed;
+                    fcache[cacheIndex].wind_gust = wh_frame.wind_gust;
+                    fcache[cacheIndex].rain_total = wh_frame.rain;
+                    fcache[cacheIndex].rssi = rssi;
+                    fcache[cacheIndex].rate = rate;
+                    fcache[cacheIndex].timestamp = millis();
+                    strncpy(fcache[cacheIndex].sensorType, "WH1080", 15);
+                    fcache[cacheIndex].sensorType[15] = '\0';
+            
+                    // ← WICHTIG: Windrichtung NUR setzen wenn gültig!
+                    if (wh_frame.wind_bearing >= 0 && wh_frame.wind_bearing <= 15) {
+                        fcache[cacheIndex].wind_direction = (int)(wh_frame.wind_bearing * 22.5f);
+                    } else {
+                        fcache[cacheIndex].wind_direction = -1;
+                    }
+                }
+                
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
@@ -745,7 +773,7 @@ void receive()
                     pub_hass_weather_config(3, ID);  // Rain
                     pub_hass_weather_config(4, ID);  // Wind Bearing
                 }
-                
+
                 frame_valid = true;
                 
                 if (config.debug_mode) {
@@ -764,6 +792,29 @@ void receive()
                 WS1600::DisplayFrame(payload, payLoadSize, &ws_frame);
                 
                 byte ID = ws_frame.ID;
+
+            int cacheIndex = ID;
+            if (cacheIndex >= 0 && cacheIndex < SENSOR_NUM) {
+                fcache[cacheIndex].ID = ID;
+                fcache[cacheIndex].channel = ws_frame.channel;
+                fcache[cacheIndex].temp = ws_frame.temp;
+                fcache[cacheIndex].humi = ws_frame.humi;
+                fcache[cacheIndex].wind_speed = ws_frame.wind_speed;
+                fcache[cacheIndex].rain_total = ws_frame.rain;
+                fcache[cacheIndex].rssi = rssi;
+                fcache[cacheIndex].rate = rate;
+                fcache[cacheIndex].batlo = ws_frame.batlo;
+                fcache[cacheIndex].timestamp = millis();
+                strncpy(fcache[cacheIndex].sensorType, "WS1600", 15);
+                fcache[cacheIndex].sensorType[15] = '\0';
+        
+                // Wind Direction: wsframe.winddirection ist 0-15
+                if (ws_frame.wind_direction >= 0 && ws_frame.wind_direction <= 15) {
+                    fcache[cacheIndex].wind_direction = (int)(ws_frame.wind_direction * 22.5f);
+                } else {
+                    fcache[cacheIndex].wind_direction = -1;
+                }
+            }
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
@@ -885,6 +936,31 @@ void receive()
                 TX22IT::DisplayFrame(payload, payLoadSize, &tx22_frame);
                 
                 byte ID = tx22_frame.ID;
+
+                int cacheIndex = ID;
+    
+            if (cacheIndex >= 0 && cacheIndex < SENSOR_NUM) {
+                fcache[cacheIndex].ID = ID;
+                fcache[cacheIndex].channel = 1;
+                fcache[cacheIndex].temp = tx22_frame.temp;
+                fcache[cacheIndex].humi = tx22_frame.humi;
+                fcache[cacheIndex].wind_speed = tx22_frame.wind_speed;
+                fcache[cacheIndex].wind_gust = tx22_frame.wind_gust;
+                fcache[cacheIndex].rssi = rssi;
+                fcache[cacheIndex].rate = rate;
+                fcache[cacheIndex].batlo = tx22_frame.batlo;
+                fcache[cacheIndex].timestamp = millis();
+                strncpy(fcache[cacheIndex].sensorType, "TX22IT", 15);
+                fcache[cacheIndex].sensorType[15] = '\0';
+        
+                // Wind Direction: tx22_frame.winddirection ist direkt 0-360°
+                if (tx22_frame.wind_direction >= 0 && tx22_frame.wind_direction <= 360) {
+                    fcache[cacheIndex].wind_direction = (int)tx22_frame.wind_direction;
+                } else {
+                    fcache[cacheIndex].wind_direction = -1;
+                }
+            }
+
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
@@ -1046,6 +1122,11 @@ void setup(void)
     char tmp[32];
     snprintf(tmp, 31, "lacrosse2mqtt_%06lX", (long)(ESP.getEfuseMac() >> 24));
     mqtt_id = String(tmp);
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        memset(&fcache[i], 0, sizeof(Cache));  // Alles auf 0
+        fcache[i].wind_direction = -1;         // ← WICHTIG: Ungültig markieren
+        fcache[i].ID = 0xFF;                   // Ungültige ID
+    }
     config.mqtt_port = 1883;
     Serial.begin(115200);
 
