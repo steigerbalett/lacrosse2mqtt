@@ -1,0 +1,57 @@
+name: Build and Release Firmware
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggert bei Tags wie v1.0.0, v2.1.3, etc.
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+          
+      - name: Install PlatformIO
+        run: |
+          pip install platformio
+          pio --version
+          
+      - name: Install ESP32 platform
+        run: |
+          pio platform install espressif32
+          
+      - name: Build firmware
+        run: |
+          cd lacrosse2mqtt
+          pio ci --board=esp32dev lacrosse2mqtt.ino
+          
+      - name: Find and rename binary
+        run: |
+          find . -name "firmware.bin" -exec cp {} lacrosse2mqtt-${{ github.ref_name }}.bin \;
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: lacrosse2mqtt-${{ github.ref_name }}.bin
+          body: |
+            ## LaCrosse2MQTT ${{ github.ref_name }}
+            
+            ### Installation
+            1. Download the `.bin` file below
+            2. Go to your device configuration page
+            3. Click "Check for Updates"
+            4. Or upload manually via `/update` endpoint
+            
+            ### Changes
+            ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
