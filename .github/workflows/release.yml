@@ -29,12 +29,11 @@ jobs:
           
       - name: Build firmware
         run: |
-          cd lacrosse2mqtt
-          pio ci --board=esp32dev lacrosse2mqtt.ino
+          pio run
           
       - name: Find and rename binary
         run: |
-          find . -name "firmware.bin" -exec cp {} lacrosse2mqtt-${{ github.ref_name }}.bin \;
+          cp .pio/build/esp32dev/firmware.bin lacrosse2mqtt-${{ github.ref_name }}.bin
           
       - name: Create Release
         uses: softprops/action-gh-release@v1
