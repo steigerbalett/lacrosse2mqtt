@@ -5,37 +5,12 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#include <time.h>
 
 // GitHub Repository Info
-#define GITHUB_REPO_OWNER "steigerballett"
+#define GITHUB_REPO_OWNER "steigerbalett"
 #define GITHUB_REPO_NAME "lacrosse2mqtt"
 #define GITHUB_API_URL "https://api.github.com/repos/" GITHUB_REPO_OWNER "/" GITHUB_REPO_NAME "/releases/latest"
-
-// GitHub Root CA Certificate (DigiCert Global Root CA)
-// Gültig bis: 2031
-const char* github_root_ca = \
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh\n" \
-"MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
-"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBD\n" \
-"QTAeFw0wNjExMTAwMDAwMDBaFw0zMTExMTAwMDAwMDBaMGExCzAJBgNVBAYTAlVT\n" \
-"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n" \
-"b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IENBMIIBIjANBgkqhkiG\n" \
-"9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4jvhEXLeqKTTo1eqUKKPC3eQyaKl7hLOllsB\n" \
-"CSDMAZOnTjC3U/dDxGkAV53ijSLdhwZAAIEJzs4bg7/fzTtxRuLWZscFs3YnFo97\n" \
-"nh6Vfe63SKMI2tavegw5BmV/Sl0fvBf4q77uKNd0f3p4mVmFaG5cIzJLv07A6Fpt\n" \
-"43C/dxC//AH2hdmoRBBYMql1GNXRor5H4idq9Joz+EkIYIvUX7Q6hL+hqkpMfT7P\n" \
-"T19sdl6gSzeRntwi5m3OFBqOasv+zbMUZBfHWymeMr/y7vrTC0LUq7dBMtoM1O/4\n" \
-"gdW7jVg/tRvoSSiicNoxBN33shbyTApOB6jtSj1etX+jkMOvJwIDAQABo2MwYTAO\n" \
-"BgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUA95QNVbR\n" \
-"TLtm8KPiGxvDl7I90VUwHwYDVR0jBBgwFoAUA95QNVbRTLtm8KPiGxvDl7I90VUw\n" \
-"DQYJKoZIhvcNAQEFBQADggEBAMucN6pIExIK+t1EnE9SsPTfrgT1eXkIoyQY/Esr\n" \
-"hMAtudXH/vTBH1jLuG2cenTnmCmrEbXjcKChzUyImZOMkXDiqw8cvpOp/2PV5Adg\n" \
-"06O/nVsJ8dWO41P0jmP6P6fbtGbfYmbW0W5BjfIttep3Sp+dWOIrWcBAI+0tKIJF\n" \
-"PnlUkiaY4IBIqDfv8NZ5YBberOgOzW6sRBc4L0na4UU+Krk2U886UAb3LujEV0ls\n" \
-"YSEY1QSteDwsOoBrp+uvFRTp2InBuThs4pFsiv9kuXclVzDAGySj4dzp30d8tbQk\n" \
-"CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=\n" \
-"-----END CERTIFICATE-----\n";
 
 struct UpdateInfo {
     bool available;
@@ -46,6 +21,8 @@ struct UpdateInfo {
     String publishedAt;
     int fileSize;
     String errorMessage;
+    bool certBundleFailed;
+    bool requiresUserConfirmation;
 };
 
 UpdateInfo updateInfo;
@@ -53,44 +30,115 @@ bool updateCheckInProgress = false;
 bool updateInstallInProgress = false;
 int updateProgress = 0;
 
+// Hilfsfunktion: Prüfe ob NTP synchronisiert ist
+bool isNTPSynced() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return false;
+    }
+    
+    // Prüfe ob das Jahr plausibel ist (zwischen 2020 und 2040)
+    int year = timeinfo.tm_year + 1900;
+    return (year >= 2020 && year <= 2040);
+}
+
+// Hilfsfunktion: Gebe aktuelle Zeit als String zurück
+String getCurrentTimeString() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "Time not available";
+    }
+    
+    char buffer[64];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    return String(buffer);
+}
+
 // Funktion: Prüfe auf neue Version
-bool checkForUpdate() {
+bool checkForUpdate(bool forceInsecure = false) {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected");
         updateInfo.errorMessage = "WiFi not connected";
         return false;
     }
     
+    // Prüfe NTP-Synchronisation
+    bool ntpOk = isNTPSynced();
+    if (!ntpOk && !forceInsecure) {
+        Serial.println("WARNING: System time not synchronized!");
+        Serial.println("Current system time: " + getCurrentTimeString());
+        Serial.println("Certificate validation will likely fail.");
+    } else if (ntpOk) {
+        Serial.println("System time OK: " + getCurrentTimeString());
+    }
+    
     updateCheckInProgress = true;
     updateInfo.errorMessage = "";
+    updateInfo.certBundleFailed = false;
+    updateInfo.requiresUserConfirmation = false;
     
     WiFiClientSecure *client = new WiFiClientSecure;
     
     if (client) {
-        // Setze GitHub Root CA Zertifikat
-        client->setCACert(github_root_ca);
+        bool useCertBundle = true;
         
-        // Oder verwende das Bundle (einfacher, aber größer):
-        // client->setCACertBundle(ca_cert_bundle_start);
+        if (!forceInsecure) {
+            // Versuche das eingebaute CA Bundle zu nutzen
+            // In ESP32 Core 3.x: attach_ssl_client() nutzt automatisch das Bundle
+            client->setCACert(NULL);  // NULL = nutzt eingebautes Mozilla CA Bundle
+            Serial.println("Using built-in Mozilla CA Bundle for certificate validation");
+            
+            if (!ntpOk) {
+                Serial.println("WARNING: Certificate validation may fail due to incorrect system time");
+            }
+        } else {
+            Serial.println("User confirmed: Using insecure connection (no certificate validation)");
+            client->setInsecure();
+            useCertBundle = false;
+        }
         
         HTTPClient http;
         
         Serial.println("Checking for updates...");
         Serial.println("URL: " + String(GITHUB_API_URL));
         
-        // Verwende HTTPS mit Zertifikat
         if (http.begin(*client, GITHUB_API_URL)) {
             http.addHeader("Accept", "application/vnd.github+json");
             http.addHeader("User-Agent", "LaCrosse2MQTT-Updater");
-            http.setTimeout(10000); // 10 Sekunden Timeout
+            http.setTimeout(10000);
             
             int httpCode = http.GET();
+            
+            // Falls mit Zertifikat fehlgeschlagen
+            if (httpCode < 0 && useCertBundle && !forceInsecure) {
+                Serial.println("ERROR: Connection with certificate validation failed!");
+                Serial.println("HTTP Error Code: " + String(httpCode));
+                
+                // Bessere Fehlerdiagnose
+                if (!ntpOk) {
+                    Serial.println("ROOT CAUSE: System time not synchronized via NTP");
+                    Serial.println("Current system time: " + getCurrentTimeString());
+                    updateInfo.errorMessage = "Certificate validation failed: System time not synchronized. Please wait for NTP sync.";
+                } else {
+                    Serial.println("ROOT CAUSE: Certificate validation failed despite correct system time");
+                    Serial.println("Possible reasons: CA bundle not available, network issues, or certificate mismatch");
+                    updateInfo.errorMessage = "Certificate validation failed. This may be due to missing CA bundle in firmware.";
+                }
+                
+                Serial.println("User confirmation required to proceed without certificate validation");
+                updateInfo.certBundleFailed = true;
+                updateInfo.requiresUserConfirmation = true;
+                
+                http.end();
+                delete client;
+                updateCheckInProgress = false;
+                return false;
+            }
             
             Serial.println("HTTP Code: " + String(httpCode));
             
             if (httpCode == HTTP_CODE_OK) {
                 String payload = http.getString();
-                
                 Serial.println("Response received, parsing JSON...");
                 
                 JsonDocument doc;
@@ -114,13 +162,24 @@ bool checkForUpdate() {
                     }
                     
                     // Vergleiche Versionen
-                    updateInfo.available = (updateInfo.latestVersion != updateInfo.currentVersion) && 
-                                           !updateInfo.downloadUrl.isEmpty();
-                    
-                    Serial.println("Update check completed:");
-                    Serial.println("Current: " + updateInfo.currentVersion);
-                    Serial.println("Latest: " + updateInfo.latestVersion);
-                    Serial.println("Available: " + String(updateInfo.available));
+                    if (updateInfo.latestVersion == updateInfo.currentVersion) {
+                        updateInfo.available = false;
+                        updateInfo.errorMessage = "Kein Update verfügbar";
+                        Serial.println("Update check completed:");
+                        Serial.println("Current: " + updateInfo.currentVersion);
+                        Serial.println("Latest: " + updateInfo.latestVersion);
+                        Serial.println("No update available");
+                    } else if (!updateInfo.downloadUrl.isEmpty()) {
+                        updateInfo.available = true;
+                        Serial.println("Update check completed:");
+                        Serial.println("Current: " + updateInfo.currentVersion);
+                        Serial.println("Latest: " + updateInfo.latestVersion);
+                        Serial.println("Update available!");
+                    } else {
+                        updateInfo.available = false;
+                        updateInfo.errorMessage = "No .bin file found in release";
+                        Serial.println("No .bin file found in latest release");
+                    }
                     
                     http.end();
                     delete client;
@@ -155,7 +214,7 @@ bool checkForUpdate() {
 }
 
 // Funktion: Installiere Update
-bool installUpdate() {
+bool installUpdate(bool forceInsecure = false) {
     if (updateInfo.downloadUrl.isEmpty()) {
         Serial.println("No download URL available");
         return false;
@@ -167,7 +226,18 @@ bool installUpdate() {
     WiFiClientSecure *client = new WiFiClientSecure;
     
     if (client) {
-        client->setCACert(github_root_ca);
+        if (!forceInsecure) {
+            client->setCACert(NULL);  // NULL = nutzt eingebautes Mozilla CA Bundle
+            Serial.println("Using built-in Mozilla CA Bundle for secure firmware download");
+            
+            if (!isNTPSynced()) {
+                Serial.println("WARNING: System time not synchronized - certificate validation may fail");
+            }
+        } else {
+            Serial.println("User confirmed: Downloading firmware without certificate validation");
+            Serial.println("SECURITY WARNING: Server identity will not be verified!");
+            client->setInsecure();
+        }
         
         HTTPClient http;
         
@@ -175,13 +245,30 @@ bool installUpdate() {
         Serial.println("URL: " + updateInfo.downloadUrl);
         
         if (http.begin(*client, updateInfo.downloadUrl)) {
-            http.setTimeout(30000); // 30 Sekunden
+            http.setTimeout(30000);
+            http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
             
             int httpCode = http.GET();
             
+            // Falls mit Certificate Bundle fehlgeschlagen
+            if (httpCode < 0 && !forceInsecure) {
+                Serial.println("ERROR: Firmware download with certificate validation failed!");
+                Serial.println("HTTP Error Code: " + String(httpCode));
+                
+                if (!isNTPSynced()) {
+                    Serial.println("ROOT CAUSE: System time not synchronized");
+                }
+                
+                http.end();
+                delete client;
+                updateInstallInProgress = false;
+                return false;
+            }
+            
+            Serial.println("Download HTTP Code: " + String(httpCode));
+            
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
                 int contentLength = http.getSize();
-                
                 Serial.println("Content-Length: " + String(contentLength));
                 
                 if (contentLength > 0) {
@@ -189,7 +276,6 @@ bool installUpdate() {
                     
                     if (canBegin) {
                         WiFiClient *stream = http.getStreamPtr();
-                        
                         size_t written = 0;
                         uint8_t buff[128] = { 0 };
                         

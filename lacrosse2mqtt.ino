@@ -35,6 +35,16 @@
 #include "wh24.h"
 #include "wh25.h"
 #include <WiFiManager.h>
+#include <time.h>
+
+// NTP Konfiguration
+#define NTP_SERVER1 "pool.ntp.org"
+#define NTP_SERVER2 "ptbtime1.ptb.de"
+#define GMT_OFFSET_SEC 3600        // GMT+1 für Deutschland (Winterzeit)
+#define DAYLIGHT_OFFSET_SEC 3600   // +1 Stunde für Sommerzeit
+
+bool ntp_synced = false;
+unsigned long last_ntp_check = 0;
 
 #define FORMAT_LITTLEFS_IF_FAILED false
 #define DISPLAY_TIMEOUT 300
@@ -162,6 +172,78 @@ void setup_mqtt_with_will()
             
             for (int i = 0; i < SENSOR_NUM; i++)
                 hass_cfg[i] = 0;
+        }
+    }
+}
+
+void setup_ntp() {
+    Serial.println("Configuring NTP time synchronization...");
+    
+    // Konfiguriere NTP mit zwei Servern für Redundanz
+    configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER1, NTP_SERVER2);
+    
+    // Warte bis Zeit synchronisiert ist (max 10 Sekunden)
+    int retry = 0;
+    const int max_retry = 20;
+    
+    struct tm timeinfo;
+    while (!getLocalTime(&timeinfo) && retry < max_retry) {
+        Serial.print(".");
+        delay(500);
+        retry++;
+    }
+    
+    if (retry < max_retry) {
+        ntp_synced = true;
+        Serial.println("\nNTP time synchronized successfully!");
+        Serial.print("Current time: ");
+        Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+        
+        // Zeige auch Unix-Timestamp
+        time_t now = time(nullptr);
+        Serial.printf("Unix timestamp: %ld\n", now);
+    } else {
+        Serial.println("\nWARNING: NTP synchronization failed!");
+        Serial.println("Certificate validation may not work correctly.");
+    }
+}
+
+String get_current_time_string() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "Time not synced";
+    }
+    
+    char buffer[64];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    return String(buffer);
+}
+
+void check_ntp_sync() {
+    unsigned long now = millis();
+    
+    // Prüfe NTP-Status alle 60 Sekunden
+    if (now - last_ntp_check > 60000) {
+        last_ntp_check = now;
+        
+        struct tm timeinfo;
+        bool currently_synced = getLocalTime(&timeinfo);
+        
+        if (currently_synced != ntp_synced) {
+            ntp_synced = currently_synced;
+            if (ntp_synced) {
+                Serial.println("NTP sync restored!");
+            } else {
+                Serial.println("WARNING: NTP sync lost!");
+            }
+        }
+        
+        // Re-sync alle 24 Stunden
+        static unsigned long last_full_sync = 0;
+        if (now - last_full_sync > 86400000) {
+            Serial.println("Performing daily NTP re-sync...");
+            configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER1, NTP_SERVER2);
+            last_full_sync = now;
         }
     }
 }
@@ -1182,6 +1264,8 @@ void setup(void)
     Serial.print("IP-Adresse: ");
     Serial.println(WiFi.localIP());
 
+    setup_ntp();
+
     littlefs_ok = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
     if (!littlefs_ok)
         Serial.println("LittleFS Mount Failed");
@@ -1313,6 +1397,7 @@ void loop(void)
     check_repeatedjobs();
     expire_cache();
     check_wifi_status();
+    check_ntp_sync();
     
     unsigned long now = millis();
     uint32_t uptime = uptime_sec();
