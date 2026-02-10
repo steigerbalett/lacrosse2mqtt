@@ -71,6 +71,14 @@ Star stars[STAR_COUNT];
 
 SX127x SX(LORA_CS, LORA_RST);
 
+int get_current_datarate() {
+    return SX.GetDataRate();
+}
+
+int get_interval() {
+    return interval;
+}
+
 String wifi_disp;
 bool showing_starfield = false;
 
@@ -926,7 +934,7 @@ void receive()
             }
         }
 
-                // ========== VERSUCHE TX22IT PROTOKOLL ==========
+        // ========== VERSUCHE TX22IT PROTOKOLL ==========
         if (!frame_valid && config.proto_tx22it && payLoadSize == 9) {
             TX22IT::Frame tx22_frame;
             tx22_frame.rssi = rssi;
@@ -1197,7 +1205,9 @@ void setup(void)
     bool use_17241 = config.proto_lacrosse;
     bool use_9579 = config.proto_tx35it;
     bool use_8842 = config.proto_tx38it;
-    SX.SetActiveDataRates(use_17241, use_9579, use_8842);
+    bool use_6618 = config.proto_wh1080;
+    bool use_4800 = config.proto_tx22it;
+    SX.SetActiveDataRates(use_17241, use_9579, use_8842, use_6618, use_4800);
 
     SX.SetupForLaCrosse();
     SX.SetFrequency(freq);

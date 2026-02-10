@@ -135,4 +135,7 @@ extern bool mqtt_ok;
 
 static inline uint32_t uptime_sec() { return (esp_timer_get_time()/(int64_t)1000000); }
 
+int get_current_datarate();
+int get_interval();
+
 #endif
