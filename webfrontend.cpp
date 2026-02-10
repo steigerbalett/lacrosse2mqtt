@@ -2147,6 +2147,16 @@ void handle_config() {
     resp += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
     resp += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
     resp += "</div>";
+
+    extern bool ntp_synced;
+    extern String get_current_time_string();
+    resp += "<p class='info-text'>NTP Sync: ";
+    if (ntp_synced) {
+        resp += "<span class='status-badge status-ok'>✓ Synced</span></p>";
+        resp += "<p class='info-text'>Current Time: " + get_current_time_string() + "</p>";
+    } else {
+        resp += "<span class='status-badge status-error'>✗ Not Synced</span></p>";
+    }
     
     resp += "<div class='card'>";
     resp += "<h2>Quick Actions</h2>";

@@ -5,6 +5,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <Update.h>
+#include <time.h>
 
 // GitHub Repository Info
 #define GITHUB_REPO_OWNER "steigerbalett"
@@ -28,7 +29,30 @@ UpdateInfo updateInfo;
 bool updateCheckInProgress = false;
 bool updateInstallInProgress = false;
 int updateProgress = 0;
-bool allowInsecureMode = false;  // Benutzer muss explizit zustimmen
+
+// Hilfsfunktion: Prüfe ob NTP synchronisiert ist
+bool isNTPSynced() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return false;
+    }
+    
+    // Prüfe ob das Jahr plausibel ist (zwischen 2020 und 2040)
+    int year = timeinfo.tm_year + 1900;
+    return (year >= 2020 && year <= 2040);
+}
+
+// Hilfsfunktion: Gebe aktuelle Zeit als String zurück
+String getCurrentTimeString() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return "Time not available";
+    }
+    
+    char buffer[64];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    return String(buffer);
+}
 
 // Funktion: Prüfe auf neue Version
 bool checkForUpdate(bool forceInsecure = false) {
@@ -36,6 +60,16 @@ bool checkForUpdate(bool forceInsecure = false) {
         Serial.println("WiFi not connected");
         updateInfo.errorMessage = "WiFi not connected";
         return false;
+    }
+    
+    // Prüfe NTP-Synchronisation
+    bool ntpOk = isNTPSynced();
+    if (!ntpOk && !forceInsecure) {
+        Serial.println("WARNING: System time not synchronized!");
+        Serial.println("Current system time: " + getCurrentTimeString());
+        Serial.println("Certificate validation will likely fail.");
+    } else if (ntpOk) {
+        Serial.println("System time OK: " + getCurrentTimeString());
     }
     
     updateCheckInProgress = true;
@@ -48,31 +82,16 @@ bool checkForUpdate(bool forceInsecure = false) {
     if (client) {
         bool useCertBundle = true;
         
-        // Wenn Benutzer forceInsecure nicht erlaubt hat, versuche Certificate Bundle
         if (!forceInsecure) {
-            // Versuche das Certificate Bundle zu laden
-            // In ESP32 Arduino Core 3.x ist das Bundle eingebaut
-            #ifdef ESP_IDF_VERSION_MAJOR
-                #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-                    // Für neuere ESP-IDF Versionen (ESP32 Core 3.x+)
-                    client->setCACert(NULL); // Nutzt das eingebaute Bundle
-                    Serial.println("Using built-in certificate bundle for secure connection");
-                #else
-                    // Fallback für ältere Versionen
-                    Serial.println("WARNING: Certificate bundle not available in this ESP32 core version!");
-                    Serial.println("Falling back to insecure connection");
-                    client->setInsecure();
-                    useCertBundle = false;
-                #endif
-            #else
-                // Wenn ESP_IDF_VERSION nicht definiert, nutze insecure
-                Serial.println("WARNING: Cannot determine ESP32 core version!");
-                Serial.println("Falling back to insecure connection");
-                client->setInsecure();
-                useCertBundle = false;
-            #endif
+            // Versuche das eingebaute CA Bundle zu nutzen
+            // In ESP32 Core 3.x: attach_ssl_client() nutzt automatisch das Bundle
+            client->setCACert(NULL);  // NULL = nutzt eingebautes Mozilla CA Bundle
+            Serial.println("Using built-in Mozilla CA Bundle for certificate validation");
+            
+            if (!ntpOk) {
+                Serial.println("WARNING: Certificate validation may fail due to incorrect system time");
+            }
         } else {
-            // Benutzer hat explizit unsichere Verbindung bestätigt
             Serial.println("User confirmed: Using insecure connection (no certificate validation)");
             client->setInsecure();
             useCertBundle = false;
@@ -83,23 +102,32 @@ bool checkForUpdate(bool forceInsecure = false) {
         Serial.println("Checking for updates...");
         Serial.println("URL: " + String(GITHUB_API_URL));
         
-        // Verwende HTTPS
         if (http.begin(*client, GITHUB_API_URL)) {
             http.addHeader("Accept", "application/vnd.github+json");
             http.addHeader("User-Agent", "LaCrosse2MQTT-Updater");
-            http.setTimeout(10000); // 10 Sekunden Timeout
+            http.setTimeout(10000);
             
             int httpCode = http.GET();
             
-            // Falls mit Certificate Bundle fehlgeschlagen, informiere Benutzer
+            // Falls mit Zertifikat fehlgeschlagen
             if (httpCode < 0 && useCertBundle && !forceInsecure) {
-                Serial.println("ERROR: Connection with certificate bundle failed!");
+                Serial.println("ERROR: Connection with certificate validation failed!");
                 Serial.println("HTTP Error Code: " + String(httpCode));
-                Serial.println("User confirmation required to proceed without certificate validation");
                 
+                // Bessere Fehlerdiagnose
+                if (!ntpOk) {
+                    Serial.println("ROOT CAUSE: System time not synchronized via NTP");
+                    Serial.println("Current system time: " + getCurrentTimeString());
+                    updateInfo.errorMessage = "Certificate validation failed: System time not synchronized. Please wait for NTP sync.";
+                } else {
+                    Serial.println("ROOT CAUSE: Certificate validation failed despite correct system time");
+                    Serial.println("Possible reasons: CA bundle not available, network issues, or certificate mismatch");
+                    updateInfo.errorMessage = "Certificate validation failed. This may be due to missing CA bundle in firmware.";
+                }
+                
+                Serial.println("User confirmation required to proceed without certificate validation");
                 updateInfo.certBundleFailed = true;
                 updateInfo.requiresUserConfirmation = true;
-                updateInfo.errorMessage = "Certificate validation failed. User confirmation required.";
                 
                 http.end();
                 delete client;
@@ -111,7 +139,6 @@ bool checkForUpdate(bool forceInsecure = false) {
             
             if (httpCode == HTTP_CODE_OK) {
                 String payload = http.getString();
-                
                 Serial.println("Response received, parsing JSON...");
                 
                 JsonDocument doc;
@@ -141,16 +168,14 @@ bool checkForUpdate(bool forceInsecure = false) {
                         Serial.println("Update check completed:");
                         Serial.println("Current: " + updateInfo.currentVersion);
                         Serial.println("Latest: " + updateInfo.latestVersion);
-                        Serial.println("Kein Update verfügbar");
+                        Serial.println("No update available");
                     } else if (!updateInfo.downloadUrl.isEmpty()) {
-                        // Update verfügbar
                         updateInfo.available = true;
                         Serial.println("Update check completed:");
                         Serial.println("Current: " + updateInfo.currentVersion);
                         Serial.println("Latest: " + updateInfo.latestVersion);
                         Serial.println("Update available!");
                     } else {
-                        // Keine .bin Datei gefunden
                         updateInfo.available = false;
                         updateInfo.errorMessage = "No .bin file found in release";
                         Serial.println("No .bin file found in latest release");
@@ -201,32 +226,17 @@ bool installUpdate(bool forceInsecure = false) {
     WiFiClientSecure *client = new WiFiClientSecure;
     
     if (client) {
-        bool useCertBundle = true;
-        
-        // Wenn forceInsecure nicht gesetzt, versuche Certificate Bundle
         if (!forceInsecure) {
-            #ifdef ESP_IDF_VERSION_MAJOR
-                #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-                    client->setCACert(NULL); // Nutzt das eingebaute Bundle
-                    Serial.println("Using built-in certificate bundle for secure firmware download");
-                #else
-                    Serial.println("WARNING: Certificate bundle not available!");
-                    Serial.println("Downloading firmware without certificate validation");
-                    Serial.println("SECURITY WARNING: Unable to verify server identity!");
-                    client->setInsecure();
-                    useCertBundle = false;
-                #endif
-            #else
-                Serial.println("WARNING: Cannot determine ESP32 core version!");
-                Serial.println("Downloading firmware without certificate validation");
-                client->setInsecure();
-                useCertBundle = false;
-            #endif
+            client->setCACert(NULL);  // NULL = nutzt eingebautes Mozilla CA Bundle
+            Serial.println("Using built-in Mozilla CA Bundle for secure firmware download");
+            
+            if (!isNTPSynced()) {
+                Serial.println("WARNING: System time not synchronized - certificate validation may fail");
+            }
         } else {
             Serial.println("User confirmed: Downloading firmware without certificate validation");
             Serial.println("SECURITY WARNING: Server identity will not be verified!");
             client->setInsecure();
-            useCertBundle = false;
         }
         
         HTTPClient http;
@@ -235,14 +245,19 @@ bool installUpdate(bool forceInsecure = false) {
         Serial.println("URL: " + updateInfo.downloadUrl);
         
         if (http.begin(*client, updateInfo.downloadUrl)) {
-            http.setTimeout(30000); // 30 Sekunden
+            http.setTimeout(30000);
+            http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
             
             int httpCode = http.GET();
             
             // Falls mit Certificate Bundle fehlgeschlagen
-            if (httpCode < 0 && useCertBundle && !forceInsecure) {
-                Serial.println("ERROR: Firmware download with certificate bundle failed!");
+            if (httpCode < 0 && !forceInsecure) {
+                Serial.println("ERROR: Firmware download with certificate validation failed!");
                 Serial.println("HTTP Error Code: " + String(httpCode));
+                
+                if (!isNTPSynced()) {
+                    Serial.println("ROOT CAUSE: System time not synchronized");
+                }
                 
                 http.end();
                 delete client;
@@ -250,9 +265,10 @@ bool installUpdate(bool forceInsecure = false) {
                 return false;
             }
             
+            Serial.println("Download HTTP Code: " + String(httpCode));
+            
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
                 int contentLength = http.getSize();
-                
                 Serial.println("Content-Length: " + String(contentLength));
                 
                 if (contentLength > 0) {
@@ -260,7 +276,6 @@ bool installUpdate(bool forceInsecure = false) {
                     
                     if (canBegin) {
                         WiFiClient *stream = http.getStreamPtr();
-                        
                         size_t written = 0;
                         uint8_t buff[128] = { 0 };
                         

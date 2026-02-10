@@ -64,7 +64,9 @@ The following libraries are needed for building (could all be installed via ardu
 
 ## Nice2have
  * Add FHEM connector
- * Add update checker and online update
+
+## Know problems
+* Certificate error update checker
 
 ## Source/Idea
 This project uses code and protocol descriptions derived from
