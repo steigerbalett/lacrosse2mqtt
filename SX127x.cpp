@@ -3,7 +3,7 @@
 #include <SPI.h>
 
 /* datarates in bps which will be cycled in NextDataRate() */
-/* static int _rates[] = { 8842, 9579, 17241 }; */
+/* static int _rates[] = { 4800, 6618, 8842, 9579, 17241 }; */
 static int _rates[] = { 9579, 17241 };
 
 
@@ -160,7 +160,7 @@ SX127x::SX127x(byte ss, byte reset)
     m_reset = reset;
     m_ss = ss;
     m_datarate = 0;
-    m_frequency = 868300;
+    m_frequency = 868250;
     m_payloadready = false;
     active_rate_count = 0;
     current_rate_index = 0;
@@ -179,7 +179,7 @@ int8_t SX127x::GetRSSI()
     return -(m_rssi / 2);
 }
 
-void SX127x::SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842)
+void SX127x::SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842, bool rate_6618, bool rate_4800)
 {
     active_rate_count = 0;
     
@@ -191,6 +191,12 @@ void SX127x::SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842)
     }
     if (rate_8842) {
         active_rates[active_rate_count++] = 8842;
+    }
+    if (rate_6618) {
+        active_rates[active_rate_count++] = 6618;
+    }
+    if (rate_4800) {
+        active_rates[active_rate_count++] = 4800;
     }
     
     // Fallback: Wenn keine Rate aktiv, verwende Standard
@@ -232,7 +238,7 @@ void SX127x::NextDataRate(byte idx)
     } else {
         if (active_rate_count == 0) {
             // Fallback auf alte Funktionsweise
-            static const int rates[] = {17241, 9579, 8842};
+            static const int rates[] = {17241, 9579, 8842, 6618, 4800};
             static byte idx_old = 0;
             if (idx == 0xff) {
                 idx_old++;

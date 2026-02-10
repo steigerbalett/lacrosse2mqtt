@@ -1,14 +1,10 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
-#define LACROSSE2MQTT_VERSION "2026.1.6"
+#define LACROSSE2MQTT_VERSION "2026.2.1"
 
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2
-/* if built with board "ttgo-lora32-v1" these are defined.
-* but this board does not define filesystem layouts.
-* plain "esp32 dev module" does not define these...
-*/
 #ifndef OLED_SDA
 // I2C OLED Display works with SSD1306 driver
 #define OLED_SDA 4
@@ -51,6 +47,16 @@ static const uint8_t LED_BUILTIN = 2;
 #define HASS_CFG_HUMI (1 << 0)
 #define HASS_CFG_TEMP (1 << 1)
 #define HASS_CFG_TEMP2 (1 << 2)
+#define HASS_CFG_WIND_SPEED (1 << 3)      // NEU
+#define HASS_CFG_WIND_DIR (1 << 4)        // NEU
+#define HASS_CFG_WIND_GUST (1 << 5)       // NEU
+#define HASS_CFG_RAIN (1 << 6)            // NEU
+#define HASS_CFG_POWER (1 << 7)           // NEU
+#define HASS_CFG_ENERGY (1 << 8)          // NEU
+#define HASS_CFG_PRESSURE (1 << 9)        // NEU
+
+#define BASE_SENSOR_TIMEOUT 300000   // 5 Minuten Basis-Timeout
+#define TIMEOUT_PER_PROTOCOL 60000   // +1 Minute pro aktiviertem Protokoll
 
 struct Cache {
     unsigned long timestamp;
@@ -70,7 +76,7 @@ struct Cache {
     float temp_ch2;
     unsigned long timestamp_ch2;
     
-    // Wetterstation Daten
+    // Wetterstation Daten (bestehend)
     float wind_speed;
     int wind_direction;
     float rain;
@@ -78,11 +84,23 @@ struct Cache {
     byte wind_gust;
     unsigned long rain_timestamp;
     unsigned long wind_timestamp;
+    
+    // Erweiterte Wetterdaten für TX22IT
+    float wind_speed_avg;
+    float wind_direction_avg;
+    float wind_gust_max;
+    
+    // Energie-Daten für EMT7110
+    float power;          // Leistung in Watt
+    float energy;         // Energie in kWh
+    unsigned long power_timestamp;
+    
+    // Luftdruck-Daten für WH24/WH25
+    float pressure;       // Luftdruck in hPa
+    unsigned long pressure_timestamp;
 };
 
 // Hilfsfunktion für Cache-Index
-// ID 30 Ch1 → Index 30
-// ID 30 Ch2 → Index 30 (gleicher Index!)
 static inline int GetCacheIndex(byte ID, byte channel) {
     return ID;
 }
@@ -104,6 +122,11 @@ struct Config {
     bool proto_tx35it;
     bool proto_ws1600;
     bool proto_wt440xh;
+    bool proto_tx22it;
+    bool proto_emt7110;
+    bool proto_w136;
+    bool proto_wh24;
+    bool proto_wh25;
 };
 
 extern Config config;
@@ -113,7 +136,9 @@ extern uint8_t hass_cfg[SENSOR_NUM];
 extern bool littlefs_ok;
 extern bool mqtt_ok;
 
-/* ugly... */
 static inline uint32_t uptime_sec() { return (esp_timer_get_time()/(int64_t)1000000); }
+
+int get_current_datarate();
+int get_interval();
 
 #endif

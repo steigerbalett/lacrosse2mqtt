@@ -6,11 +6,9 @@
 #include <ArduinoJson.h>
 #include <rom/rtc.h>
 #include "WiFi.h"
+#include "update_check.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
-					   
-								
 
 // Debug-Log Buffer (ringbuffer für letzte 100 Frames)
 #define DEBUG_LOG_SIZE 100
@@ -123,11 +121,12 @@ bool load_config()
     config.screensaver_mode = true; /* default */
     config.mqtt_use_names = true;
     config.proto_lacrosse = true;
-    config.proto_wh1080 = true;
+    config.proto_wh1080 = false;
     config.proto_tx38it = false;
     config.proto_tx35it = true;
-    config.proto_ws1600 = true;
+    config.proto_ws1600 = false;
     config.proto_wt440xh = true;
+    config.proto_w136 = false;
     
     if (!littlefs_ok)
         return false;
@@ -180,6 +179,8 @@ bool load_config()
             config.proto_ws1600 = doc["proto_ws1600"];
         if (!doc["proto_wt440xh"].isNull())
             config.proto_wt440xh = doc["proto_wt440xh"];
+        if (!doc["proto_w136"].isNull())
+            config.proto_w136 = doc["proto_w136"];
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -196,6 +197,7 @@ bool load_config()
         Serial.println("proto_tx35it: " + String(config.proto_tx35it));
         Serial.println("proto_ws1600: " + String(config.proto_ws1600));
         Serial.println("proto_wt440xh: " + String(config.proto_wt440xh));
+        Serial.println("proto_w136: " + String(config.proto_w136));
     }
     
     cfg.close();
@@ -230,6 +232,7 @@ bool save_config()
     doc["proto_tx35it"] = config.proto_tx35it;
     doc["proto_ws1600"] = config.proto_ws1600;
     doc["proto_wt440xh"] = config.proto_wt440xh;
+    doc["proto_w136"] = config.proto_w136;
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -306,38 +309,141 @@ bool save_idmap()
     return true;
 }
 
+void handle_check_update() {
+    String response;
+    
+    if (updateCheckInProgress) {
+        response = "{\"status\":\"checking\"}";
+    } else {
+        bool success = checkForUpdate();
+        
+        if (success) {
+            JsonDocument doc;
+            doc["status"] = "success";
+            doc["available"] = updateInfo.available;
+            doc["currentVersion"] = updateInfo.currentVersion;
+            doc["latestVersion"] = updateInfo.latestVersion;
+            doc["downloadUrl"] = updateInfo.downloadUrl;
+            doc["fileSize"] = updateInfo.fileSize;
+            doc["publishedAt"] = updateInfo.publishedAt;
+            doc["releaseNotes"] = updateInfo.releaseNotes;
+            
+            serializeJson(doc, response);
+        } else {
+            response = "{\"status\":\"error\",\"message\":\"Failed to check for updates\"}";
+        }
+    }
+    
+    server.send(200, "application/json", response);
+}
+
+void handle_install_update() {
+    if (updateInstallInProgress) {
+        server.send(409, "application/json", "{\"status\":\"error\",\"message\":\"Update already in progress\"}");
+        return;
+    }
+    
+    if (!updateInfo.available || updateInfo.downloadUrl.isEmpty()) {
+        server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"No update available\"}");
+        return;
+    }
+    
+    server.send(200, "application/json", "{\"status\":\"started\",\"message\":\"Update installation started\"}");
+    
+    // Starte Update in separatem Task
+    installUpdate();
+}
+
+void handle_update_progress() {
+    JsonDocument doc;
+    doc["inProgress"] = updateInstallInProgress;
+    doc["progress"] = updateProgress;
+    
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
+}
+
 void add_current_table(String &s, bool rawdata)
 {
     unsigned long now = millis();
     
+    // SCHRITT 1: Prüfe welche Datentypen überhaupt vorhanden sind
+    bool hasTempCh2 = false;
+    bool hasHumidity = false;
+    bool hasWindSpeed = false;
+    bool hasWindDir = false;
+    bool hasWindGust = false;
+    bool hasRain = false;
+    bool hasPower = false;
+    bool hasPressure = false;
+    
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
+            continue;
+            
+        if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100)
+            hasTempCh2 = true;
+        if (fcache[i].humi > 0 && fcache[i].humi <= 100)
+            hasHumidity = true;
+        if (fcache[i].wind_speed > 0)
+            hasWindSpeed = true;
+        if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360)
+            hasWindDir = true;
+        if (fcache[i].wind_gust > 0)
+            hasWindGust = true;
+        if (fcache[i].rain_total > 0)
+            hasRain = true;
+        if (fcache[i].power > 0)
+            hasPower = true;
+        if (fcache[i].pressure > 0)
+            hasPressure = true;
+    }
+    
+    // SCHRITT 2: Baue Tabellenkopf dynamisch
     s += "<h2>Current sensor data</h2>\n";
     s += "<table id='sensor-table'>\n";
     s += "<thead><tr>";
     s += "<th>ID</th>";
-    s += "<th>Ch</th>";
+//    s += "<th>Ch</th>";
     s += "<th>Type</th>";
     s += "<th>Temperature</th>";
-    s += "<th>Humidity</th>";
+    
+    if (hasTempCh2)
+        s += "<th>Temp 2</th>";
+    if (hasHumidity)
+        s += "<th>Humidity</th>";
+    if (hasWindSpeed)
+        s += "<th>Wind Speed</th>";
+    if (hasWindDir)
+        s += "<th>Wind Dir</th>";
+    if (hasWindGust)
+        s += "<th>Wind Gust</th>";
+    if (hasRain)
+        s += "<th>Rain</th>";
+    if (hasPower)
+        s += "<th>Power</th>";
+    if (hasPressure)
+        s += "<th>Pressure</th>";
+    
     s += "<th>RSSI</th>";
     s += "<th>Name</th>";
     s += "<th>Age (ms)</th>";
     s += "<th>Battery</th>";
     s += "<th>New Batt</th>";
+    
     if (rawdata)
         s += "<th>Raw Frame Data</th>";
+    
     s += "</tr></thead>\n";
     s += "<tbody id='sensor-tbody'>\n";
 
     int sensorCount = 0;
     
+    // SCHRITT 3: Baue Tabellenzeilen dynamisch
     for (int i = 0; i < SENSOR_NUM; i++)
     {
-        // Überspringe leere Einträge
-        if (fcache[i].timestamp == 0)
-            continue;
-        
-        // Überspringe ungültige IDs
-        if (fcache[i].ID == 0xFF)
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
             continue;
             
         sensorCount++;
@@ -346,10 +452,8 @@ void add_current_table(String &s, bool rawdata)
         if (name.length() == 0)
             name = "-";
 
-        // ID ist die Originale
         int displayID = fcache[i].ID;
         
-        // Sensor-Typ aus Cache
         String sensorType = String(fcache[i].sensorType);
         if (sensorType.length() == 0)
             sensorType = "LaCrosse";
@@ -360,19 +464,84 @@ void add_current_table(String &s, bool rawdata)
         s += "<td>" + String(displayID) + "</td>";
         
         // Channel
-        s += "<td>" + String(fcache[i].channel) + "</td>";
+//        s += "<td>" + String(fcache[i].channel) + "</td>";
         
         // Type
         s += "<td>" + sensorType + "</td>";
 
-        // Temperatur
+        // Temperatur 1 (immer anzeigen)
         s += "<td>" + String(fcache[i].temp, 1) + " °C</td>";
 
-        // Luftfeuchtigkeit
-        if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
-            s += "<td>" + String(fcache[i].humi) + " %</td>";
-        } else {
-            s += "<td>-</td>";
+        // Temperatur 2 (nur wenn Spalte sichtbar)
+        if (hasTempCh2) {
+            if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
+                s += "<td>" + String(fcache[i].temp_ch2, 1) + " °C</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Luftfeuchtigkeit (nur wenn Spalte sichtbar)
+        if (hasHumidity) {
+            if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
+                s += "<td>" + String(fcache[i].humi) + " %</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Wind Speed (nur wenn Spalte sichtbar)
+        if (hasWindSpeed) {
+            if (fcache[i].wind_speed > 0) {
+                s += "<td>" + String(fcache[i].wind_speed, 1) + " km/h</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Wind Direction (nur wenn Spalte sichtbar)
+        if (hasWindDir) {
+            if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360) {
+                s += "<td>" + String(fcache[i].wind_direction) + "°</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Wind Gust (nur wenn Spalte sichtbar)
+        if (hasWindGust) {
+            if (fcache[i].wind_gust > 0) {
+                s += "<td>" + String(fcache[i].wind_gust) + " km/h</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Rain (nur wenn Spalte sichtbar)
+        if (hasRain) {
+            if (fcache[i].rain_total > 0) {
+                s += "<td>" + String(fcache[i].rain_total, 1) + " mm</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Power (nur wenn Spalte sichtbar)
+        if (hasPower) {
+            if (fcache[i].power > 0) {
+                s += "<td>" + String(fcache[i].power, 1) + " W</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Pressure (nur wenn Spalte sichtbar)
+        if (hasPressure) {
+            if (fcache[i].pressure > 0) {
+                s += "<td>" + String(fcache[i].pressure, 1) + " hPa</td>";
+            } else {
+                s += "<td>-</td>";
+            }
         }
 
         // RSSI
@@ -385,7 +554,7 @@ void add_current_table(String &s, bool rawdata)
         unsigned long age = now - fcache[i].timestamp;
         s += "<td>" + String(age) + "</td>";
 
-        // Battery mit Farbe
+        // Battery
         if (fcache[i].batlo) {
             s += "<td class='batt-weak'>weak</td>";
         } else {
@@ -403,12 +572,12 @@ void add_current_table(String &s, bool rawdata)
         if (rawdata) {
             s += "<td class='raw-data'>0x";
             for (int j = 0; j < FRAME_LENGTH; j++) {
-            char tmp[3];
-            snprintf(tmp, 3, "%02X", fcache[i].data[j]);
-            s += String(tmp);
-        if (j < FRAME_LENGTH - 1)
-            s += " ";
-}
+                char tmp[3];
+                snprintf(tmp, 3, "%02X", fcache[i].data[j]);
+                s += String(tmp);
+                if (j < FRAME_LENGTH - 1)
+                    s += " ";
+            }
             s += "</td>";
         }
 
@@ -426,7 +595,7 @@ void add_current_table(String &s, bool rawdata)
     }
 }
 
-// NEU: JSON-Endpoint für Sensordaten
+// JSON-Endpoint für Sensordaten
 void handle_sensors_json() {
     unsigned long now = millis();
     JsonDocument doc;
@@ -442,13 +611,59 @@ void handle_sensors_json() {
         sensor["ch"] = fcache[i].channel;
         sensor["type"] = String(fcache[i].sensorType);
         sensor["temp"] = serialized(String(fcache[i].temp, 1));
+        
+        if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
+            sensor["temp2"] = serialized(String(fcache[i].temp_ch2, 1));
+        } else {
+            sensor["temp2"] = nullptr;
+        }
+        
         sensor["humi"] = fcache[i].humi;
+        
+        // Wetterdaten
+        if (fcache[i].wind_speed > 0) {
+            sensor["wind_speed"] = serialized(String(fcache[i].wind_speed, 1));
+        } else {
+            sensor["wind_speed"] = nullptr;
+        }
+        
+        if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360) {
+            sensor["wind_dir"] = fcache[i].wind_direction;
+        } else {
+            sensor["wind_dir"] = nullptr;
+        }
+        
+        if (fcache[i].wind_gust > 0) {
+            sensor["wind_gust"] = fcache[i].wind_gust;
+        } else {
+            sensor["wind_gust"] = nullptr;
+        }
+        
+        if (fcache[i].rain_total > 0) {
+            sensor["rain"] = serialized(String(fcache[i].rain_total, 1));
+        } else {
+            sensor["rain"] = nullptr;
+        }
+        
+        if (fcache[i].power > 0) {
+            sensor["power"] = serialized(String(fcache[i].power, 1));
+        } else {
+            sensor["power"] = nullptr;
+        }
+        
+        if (fcache[i].pressure > 0) {
+            sensor["pressure"] = serialized(String(fcache[i].pressure, 1));
+        } else {
+            sensor["pressure"] = nullptr;
+        }
+        
         sensor["rssi"] = fcache[i].rssi;
         sensor["name"] = id2name[fcache[i].ID];
         sensor["age"] = now - fcache[i].timestamp;
         sensor["batlo"] = fcache[i].batlo;
         sensor["init"] = fcache[i].init;
         
+        // Raw Data
         String rawData = "";
         for (int j = 0; j < FRAME_LENGTH; j++) {
             char tmp[3];
@@ -470,6 +685,7 @@ void handle_sensors_json() {
     doc["wifi_ssid"] = WiFi.SSID();
     doc["wifi_ip"] = WiFi.localIP().toString();
     doc["cpu_usage"] = serialized(String(cpu_usage, 1));
+    doc["current_datarate"] = get_current_datarate();
     
     String output;
     serializeJson(doc, output);
@@ -483,120 +699,162 @@ static void add_header(String &s, const String &title)
         "<meta name='viewport' content='width=device-width, initial-scale=1'>";
     
     if (title.indexOf("Gateway") > -1 || title.indexOf("Configuration") > -1) {
-        s += "<script>"
-             "let autoRefreshEnabled = true;"
-             "let refreshInterval = 5000;"
-             "let refreshTimer;"
-             
-             "function updateSensorData() {"
-"  if (!autoRefreshEnabled) return;"
-"  fetch('/sensors.json')"
-"    .then(response => response.json())"
-"    .then(data => {"
-"      const tbody = document.getElementById('sensor-tbody');"
-"      if (tbody) {"
-"        tbody.innerHTML = '';"
-"        data.sensors.forEach(sensor => {"
-"          const row = tbody.insertRow();"
-"          row.innerHTML = '<td>' + sensor.id + '</td>' +"  // ← String-Konkatenation statt Template
-"            '<td>' + sensor.ch + '</td>' +"
-"            '<td>' + sensor.type + '</td>' +"
-"            '<td>' + sensor.temp + ' °C</td>' +"
-"            '<td>' + (sensor.humi > 0 && sensor.humi <= 100 ? sensor.humi + ' %' : '-') + '</td>' +"
-"            '<td>' + sensor.rssi + '</td>' +"
-"            '<td>' + (sensor.name || '-') + '</td>' +"
-"            '<td>' + sensor.age + '</td>' +"
-"            '<td class=\"' + (sensor.batlo ? 'batt-weak' : 'batt-ok') + '\">' + (sensor.batlo ? 'weak' : 'ok') + '</td>' +"
-"            '<td class=\"' + (sensor.init ? 'init-new' : 'init-no') + '\">' + (sensor.init ? 'yes' : 'no') + '</td>' +"
-"            '<td class=\"raw-data\">0x' + sensor.raw + '</td>';"
-"        });"
-"      }"
-"      const systemStatus = document.getElementById('system-status');"
-"      if (systemStatus) {"
-"        let statusHtml = '';"
-"        if (data.mqtt_ok) {"
-"          statusHtml += '<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
-"        } else {"
-"          statusHtml += '<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
-"        }"
-"        if (data.wifi_ok) {"
-"          statusHtml += '<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
-"        } else {"
-"          statusHtml += '<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';"
-"        }"
-"        systemStatus.innerHTML = statusHtml;"
-"      }"
-"      const wifiSsid = document.getElementById('wifi-ssid');"
-"      if (wifiSsid && data.wifi_ssid) {"
-"        wifiSsid.textContent = 'SSID: ' + data.wifi_ssid;"
-"      }"
-"      const wifiIp = document.getElementById('wifi-ip');"
-"      if (wifiIp && data.wifi_ip) {"
-"        wifiIp.textContent = 'IP: ' + data.wifi_ip;"
-"      }"
-"      const uptime = document.getElementById('system-uptime');"
-"      if (uptime && data.uptime) {"
-"        uptime.textContent = 'Uptime: ' + data.uptime;"
-"      }"
-"      const cpuLoad = document.getElementById('cpu-load');"
-"      if (cpuLoad && data.cpu_usage) {"
-"        cpuLoad.textContent = 'CPU Load: ' + data.cpu_usage + '%';"
-"      }"
-"      const countElem = document.getElementById('sensor-count');"
-"      if (countElem) {"
-"        if (data.count === 0) {"
-"          countElem.innerHTML = '<em>No sensors found. Waiting for data...</em>';"
-"        } else {"
-"          countElem.innerHTML = '<em>Total sensors: ' + data.count + ' | Last update: ' + new Date().toLocaleTimeString() + '</em>';"
-"        }"
-"      }"
-"      const refreshStatus = document.getElementById('refresh-status');"
-"      if (refreshStatus) {"
-"        refreshStatus.textContent = '✓ Live (updated ' + new Date().toLocaleTimeString() + ')';"
-"        refreshStatus.style.color = 'var(--success-color)';"
-"      }"
-"    })"
-"    .catch(error => {"
-"      console.error('Error:', error);"
-"      const refreshStatus = document.getElementById('refresh-status');"
-"      if (refreshStatus) {"
-"        refreshStatus.textContent = '✗ Error';"
-"        refreshStatus.style.color = 'var(--error-color)';"
-"      }"
-"    });"
-"}"
+    s += "<script>"
+    "let autoRefreshEnabled=true,refreshInterval=5000,refreshTimer;"
+    "function updateSensorData(){"
+    "if(!autoRefreshEnabled)return;"
+    "fetch('/sensors.json').then(r=>r.json()).then(data=>{"
+    "let hasTempCh2=false,hasHumidity=false,hasWindSpeed=false,hasWindDir=false,hasWindGust=false,hasRain=false,hasPower=false,hasPressure=false;"
+    "data.sensors.forEach(s=>{if(s.temp2!==null)hasTempCh2=true;if(s.humi>0&&s.humi<=100)hasHumidity=true;"
+    "if(s.wind_speed!==null)hasWindSpeed=true;if(s.wind_dir!==null && s.wind_dir>=0 && s.wind_dir<=360)hasWindDir=true;if(s.wind_gust!==null)hasWindGust=true;"
+    "if(s.rain!==null)hasRain=true;if(s.power!==null)hasPower=true;if(s.pressure!==null)hasPressure=true;});"
+    "const t=document.getElementById('sensor-table');if(t){const h=t.querySelector('thead tr');if(h){"
+    "let hh='<th>ID</th><th>Ch</th><th>Type</th><th>Temperature</th>';"
+    "if(hasTempCh2)hh+='<th>Temp 2</th>';if(hasHumidity)hh+='<th>Humidity</th>';"
+    "if(hasWindSpeed)hh+='<th>Wind Speed</th>';if(hasWindDir)hh+='<th>Wind Dir</th>';"
+    "if(hasWindGust)hh+='<th>Wind Gust</th>';if(hasRain)hh+='<th>Rain</th>';"
+    "if(hasPower)hh+='<th>Power</th>';if(hasPressure)hh+='<th>Pressure</th>';"
+    "hh+='<th>RSSI</th><th>Name</th><th>Age (ms)</th><th>Battery</th><th>New Batt</th><th>Raw Frame Data</th>';"
+    "h.innerHTML=hh;}}"
+    "const b=document.getElementById('sensor-tbody');if(b){b.innerHTML='';data.sensors.forEach(s=>{"
+    "const r=b.insertRow();let rh='<td>'+s.id+'</td><td>'+s.ch+'</td><td>'+s.type+'</td><td>'+s.temp+' °C</td>';"
+    "if(hasTempCh2)rh+='<td>'+(s.temp2!==null?s.temp2+' °C':'-')+'</td>';"
+    "if(hasHumidity)rh+='<td>'+(s.humi>0&&s.humi<=100?s.humi+' %':'-')+'</td>';"
+    "if(hasWindSpeed)rh+='<td>'+(s.wind_speed!==null?s.wind_speed+' km/h':'-')+'</td>';"
+    "if(hasWindDir)rh+='<td>'+(s.wind_dir!==null && s.wind_dir>=0?s.wind_dir+'°':'-')+'</td>';"
+    "if(hasWindGust)rh+='<td>'+(s.wind_gust!==null?s.wind_gust+' km/h':'-')+'</td>';"
+    "if(hasRain)rh+='<td>'+(s.rain!==null?s.rain+' mm':'-')+'</td>';"
+    "if(hasPower)rh+='<td>'+(s.power!==null?s.power+' W':'-')+'</td>';"
+    "if(hasPressure)rh+='<td>'+(s.pressure!==null?s.pressure+' hPa':'-')+'</td>';"
+    "rh+='<td>'+s.rssi+'</td><td>'+(s.name||'-')+'</td><td>'+s.age+'</td>'+"
+    "'<td class=\"'+(s.batlo?'batt-weak':'batt-ok')+'\">'+(s.batlo?'weak':'ok')+'</td>'+"
+    "'<td class=\"'+(s.init?'init-new':'init-no')+'\">'+(s.init?'yes':'no')+'</td>'+"
+    "'<td class=\"raw-data\">0x'+s.raw+'</td>';r.innerHTML=rh;});}"
+    "const ss=document.getElementById('system-status');if(ss){"
+    "let sh='';if(data.mqtt_ok)sh+='<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
+    "else sh+='<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
+    "if(data.wifi_ok)sh+='<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
+    "else sh+='<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';ss.innerHTML=sh;}"
+    "const ws=document.getElementById('wifi-ssid');if(ws&&data.wifi_ssid)ws.textContent='SSID: '+data.wifi_ssid;"
+    "const wi=document.getElementById('wifi-ip');if(wi&&data.wifi_ip)wi.textContent='IP: '+data.wifi_ip;"
+    "const up=document.getElementById('system-uptime');if(up&&data.uptime)up.textContent='Uptime: '+data.uptime;"
 
-             "function toggleAutoRefresh() {"
-             "  autoRefreshEnabled = !autoRefreshEnabled;"
-             "  const btn = document.getElementById('auto-refresh-btn');"
-             "  const status = document.getElementById('refresh-status');"
-             "  "
-             "  if (autoRefreshEnabled) {"
-             "    btn.textContent = '⏸️ Pause Auto-Refresh';"
-             "    btn.style.backgroundColor = 'var(--warning-color)';"
-             "    status.textContent = '⏳ Starting...';"
-             "    status.style.color = 'var(--info-color)';"
-             "    startAutoRefresh();"
-             "    updateSensorData();"
-             "  } else {"
-             "    btn.textContent = '▶️ Resume Auto-Refresh';"
-             "    btn.style.backgroundColor = 'var(--success-color)';"
-             "    status.textContent = '⏸️ Paused';"
-             "    status.style.color = 'var(--warning-color)';"
-             "    if (refreshTimer) clearInterval(refreshTimer);"
-             "  }"
-             "}"
-             
-             "function startAutoRefresh() {"
-             "  if (refreshTimer) clearInterval(refreshTimer);"
-             "  refreshTimer = setInterval(updateSensorData, refreshInterval);"
-             "}"
-             
-             "window.addEventListener('DOMContentLoaded', () => {"
-             "  startAutoRefresh();"
-             "  setTimeout(updateSensorData, 1000);"
-             "});"
-             "</script>";
+    // CPU Load Update - separates Update für Wert und Balken
+    "const clValue=document.getElementById('cpu-load-value');"
+    "const clBar=document.getElementById('cpu-load-bar');"
+    "if(clValue&&data.cpu_usage){"
+    "clValue.textContent=data.cpu_usage+'%';"
+    "if(data.cpu_usage<50){clValue.style.color='var(--success-color)';if(clBar)clBar.style.background='var(--success-color)';}"
+    "else if(data.cpu_usage<80){clValue.style.color='var(--warning-color)';if(clBar)clBar.style.background='var(--warning-color)';}"
+    "else{clValue.style.color='var(--error-color)';if(clBar)clBar.style.background='var(--error-color)';}"
+    "if(clBar)clBar.style.width=data.cpu_usage+'%';}"
+
+    // Datenrate Updates für beide Seiten (Index + Config)
+    "const dr=document.getElementById('datarate-value');"
+    "if(dr&&data.current_datarate)dr.textContent=data.current_datarate;"
+    "const configDr=document.getElementById('config-datarate-value');"
+    "if(configDr&&data.current_datarate)configDr.textContent=data.current_datarate;"
+
+    // Badge-Hervorhebung der aktiven Datenrate (Config-Seite)
+    "const badgeContainer=document.getElementById('datarate-badges');"
+    "if(badgeContainer&&data.current_datarate){"
+    "const badges=badgeContainer.querySelectorAll('span');"
+    "badges.forEach(badge=>{"
+    "const text=badge.textContent.trim();"
+    "let active=false;"
+    "if(text==='17.2k'&&data.current_datarate==17241)active=true;"
+    "else if(text==='9.6k'&&data.current_datarate==9579)active=true;"
+    "else if(text==='8.8k'&&data.current_datarate==8842)active=true;"
+    "else if(text==='6.6k'&&data.current_datarate==6618)active=true;"
+    "else if(text==='4.8k'&&data.current_datarate==4800)active=true;"
+    "if(active){"
+    "badge.style.backgroundColor='var(--accent-color)';"
+    "badge.style.color='white';"
+    "badge.style.fontWeight='bold';"
+    "}else{"
+    "badge.style.backgroundColor='';"
+    "badge.style.color='';"
+    "badge.style.fontWeight='';}"
+    "});}"
+
+    "const ce=document.getElementById('sensor-count');if(ce){"
+    "if(data.count===0)ce.innerHTML='<em>No sensors found. Waiting for data...</em>';"
+    "else ce.innerHTML='<em>Total sensors: '+data.count+' | Last update: '+new Date().toLocaleTimeString()+'</em>';}"
+    "const rs=document.getElementById('refresh-status');if(rs){"
+    "rs.textContent='✓ Live (updated '+new Date().toLocaleTimeString()+')';rs.style.color='var(--success-color)';}}"
+    ").catch(e=>{console.error('Error:',e);const rs=document.getElementById('refresh-status');"
+    "if(rs){rs.textContent='✗ Error';rs.style.color='var(--error-color)';}});}"
+    "function toggleAutoRefresh(){autoRefreshEnabled=!autoRefreshEnabled;"
+    "const btn=document.getElementById('auto-refresh-btn'),st=document.getElementById('refresh-status');"
+    "if(autoRefreshEnabled){btn.textContent='⏸️ Pause Auto-Refresh';btn.style.backgroundColor='var(--warning-color)';"
+    "st.textContent='⏳ Starting...';st.style.color='var(--info-color)';startAutoRefresh();updateSensorData();}"
+    "else{btn.textContent='▶️ Resume Auto-Refresh';btn.style.backgroundColor='var(--success-color)';"
+    "st.textContent='⏸️ Paused';st.style.color='var(--warning-color)';if(refreshTimer)clearInterval(refreshTimer);}}"
+    "function startAutoRefresh(){if(refreshTimer)clearInterval(refreshTimer);"
+    "refreshTimer=setInterval(updateSensorData,refreshInterval);}"
+    "window.addEventListener('DOMContentLoaded',()=>{startAutoRefresh();setTimeout(updateSensorData,1000);});"
+    "function checkForUpdate(){"
+"const btn=document.getElementById('check-update-btn');"
+"const details=document.getElementById('update-details');"
+"btn.disabled=true;"
+"btn.textContent='⏳ Checking...';"
+"fetch('/check-update').then(r=>r.json()).then(data=>{"
+"btn.disabled=false;"
+"btn.textContent='Check for Updates';"
+"if(data.status==='success'){"
+"if(data.available){"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+"
+"'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+"
+"'<button onclick=\"installUpdate()\" class=\"action-button\" style=\"background:var(--success-color);margin-top:8px;\">Install Update</button>'+"
+"'</div>';"
+"}else{"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+"
+"'</div>';"
+"}"
+"}else{"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+"
+"'</div>';"
+"}"
+"}).catch(e=>{"
+"btn.disabled=false;"
+"btn.textContent='Check for Updates';"
+"console.error('Error:',e);"
+"});}"
+
+"function installUpdate(){"
+"if(!confirm('The device will restart after the update. Continue?'))return;"
+"document.getElementById('update-details').style.display='none';"
+"document.getElementById('update-progress-container').style.display='block';"
+"fetch('/install-update',{method:'POST'}).then(r=>r.json()).then(data=>{"
+"if(data.status==='started'){"
+"const progressInterval=setInterval(()=>{"
+"fetch('/update-progress').then(r=>r.json()).then(p=>{"
+"const bar=document.getElementById('update-progress-bar');"
+"const text=document.getElementById('update-progress-text');"
+"bar.style.width=p.progress+'%';"
+"text.textContent=p.progress+'%';"
+"if(!p.inProgress){"
+"clearInterval(progressInterval);"
+"text.textContent='Update complete! Rebooting...';"
+"}"
+"});"
+"},500);"
+"}else{"
+"alert('Failed to start update: '+data.message);"
+"document.getElementById('update-progress-container').style.display='none';"
+"}"
+"}).catch(e=>{console.error('Error:',e);alert('Update failed!');});}"
+    "</script>";
     }
     
     s += "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
@@ -1215,11 +1473,12 @@ String ESP32GetResetReason(uint32_t cpu_no) {
 static void add_sysinfo_footer(String &s)
 {
     s += "<div class='footer'>"
-         "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>Powered by LaCrosse2MQTT</a> | "
-         "<a href='/'>🏠 Home</a> | "
-         "<a href='/config.html'>⚙️ Configuration</a> | "
-         "<a href='/update'>📦 Update</a>"
-         "<a href='/licenses.html'>📄 Licenses</a>";
+         "<p>"
+         "<a href='/'>Home</a> | "
+         "<a href='config.html'>Configuration</a> | "
+         "<a href='update'>Update</a> | "
+         "<a href='licenses.html'>Licenses</a> | "
+         "<a href='https://github.com/steigerbalett/lacrosse2mqtt' target='_blank'>Powered by LaCrosse2MQTT</a>"
          "</p></div>"
          "</body></html>";
 }
@@ -1249,10 +1508,11 @@ void handle_index()
     index += "<p class='info-text' id='wifi-ssid'>SSID: " + WiFi.SSID() + "</p>";
     index += "<p class='info-text' id='wifi-ip'>IP: " + WiFi.localIP().toString() + "</p>";
     index += "<p class='info-text' id='system-uptime'>Uptime: " + time_string() + "</p>";
-    index += "<p class='info-text' id='cpu-load'>CPU Load: " + String(cpu_usage, 1) + "%</p>";
+//    index += "<p class='info-text' id='cpu-load'>CPU Load: " + String(cpu_usage, 1) + "%</p>";
+//    index += "<p class='info-text' id='current-datarate'>Current Data Rate: <span id='datarate-value'>" + String(get_current_datarate()) + "</span> bps</p>";
     index += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
-    index += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
-    index += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
+//    index += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
+//    index += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
     index += "</div>";
     
     index += "<div class='card'>";
@@ -1363,6 +1623,10 @@ void handle_licenses()
     page += "<li><strong>WT440XH</strong> - Compact temperature/humidity sensors</li>";
     page += "<li><strong>TX35-IT/TX35DTH-IT</strong> - Additional sensor variants (9.579 kbps)</li>";
     page += "<li><strong>TX38-IT</strong> - Indoor temperature sensors (8.842 kbps)</li>";
+    page += "<li><strong>TX22-IT</strong> - Weatherstation</li>";
+    page += "<li><strong>WH24</strong> -  868.300 MHz (17.241 kbps)</li>";
+    page += "<li><strong>WH25</strong> - 868.300 MHz (17.241 kbps)</li>";
+    page += "<li><strong>W136</strong> - 869.820 MHz (4.800 kbps)</li>";
     page += "</ul>";
     page += "</div>";
     
@@ -1644,6 +1908,7 @@ void handle_config() {
         bool new_tx35it = (server.hasArg("proto_tx35it") && server.arg("proto_tx35it") == "1");
         bool new_ws1600 = (server.hasArg("proto_ws1600") && server.arg("proto_ws1600") == "1");
         bool new_wt440xh = (server.hasArg("proto_wt440xh") && server.arg("proto_wt440xh") == "1");
+        bool new_w136 = (server.hasArg("proto_w136") && server.arg("proto_w136") == "1");
         
         // Prüfe auf Änderungen und update
         if (new_lacrosse != config.proto_lacrosse) {
@@ -1682,6 +1947,12 @@ void handle_config() {
             config.changed = true;
             Serial.println("WT440XH protocol changed to: " + String(config.proto_wt440xh));
         }
+        if (new_w136 != config.proto_w136) {
+            config.proto_w136 = new_w136;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("W136 protocol changed to: " + String(config.proto_w136));
+        }
     }
     
     String resp;
@@ -1704,34 +1975,27 @@ void handle_config() {
     }
 
      // CPU-Auslastung mit Farbe
-    resp += "<p class='info-text' id='cpu-load'>CPU Load: ";
-    resp += "<span style='font-weight: 500; color: ";
-    if (cpu_usage < 50) {
-        resp += "var(--success-color);'>"; // Grün
-    } else if (cpu_usage < 80) {
-        resp += "var(--warning-color);'>"; // Orange
-    } else {
-        resp += "var(--error-color);'>"; // Rot
-    }
-    resp += String(cpu_usage, 1) + "%</span>";
+    resp += "<p class='info-text'>CPU Load: ";
+    resp += "<span id='cpu-load-value' style='font-weight: 500; color: ";
+    if (cpu_usage < 50) resp += "var(--success-color)";
+    else if (cpu_usage < 80) resp += "var(--warning-color)";
+    else resp += "var(--error-color)";
+    resp += ";'>" + String(cpu_usage, 1) + "%</span>";
     
     // CPU-Balken
-    resp += " <span style='display: inline-block; width: 100px; height: 8px; background: var(--divider-color); border-radius: 4px; vertical-align: middle;'>";
-    resp += "<span style='display: block; width: " + String(cpu_usage, 0) + "%; height: 100%; background: ";
-    if (cpu_usage < 50) {
-        resp += "var(--success-color);";
-    } else if (cpu_usage < 80) {
-        resp += "var(--warning-color);";
-    } else {
-        resp += "var(--error-color);";
-    }
-    resp += " border-radius: 4px;'></span></span>";
+    resp += "<span style='display: inline-block; width: 100px; height: 8px; background: var(--divider-color); border-radius: 4px; vertical-align: middle; margin-left: 8px;'>";
+    resp += "<span id='cpu-load-bar' style='display: block; width: " + String(cpu_usage, 0) + "%; height: 100%; background: ";
+    if (cpu_usage < 50) resp += "var(--success-color)";
+    else if (cpu_usage < 80) resp += "var(--warning-color)";
+    else resp += "var(--error-color)";
+    resp += "; border-radius: 4px; transition: width 0.3s, background 0.3s;'></span></span>";
     resp += "</p>";
 
     resp += "</p>";
     resp += "<p class='info-text' id='wifi-ssid'>SSID: " + WiFi.SSID() + "</p>";
     resp += "<p class='info-text' id='wifi-ip'>IP: " + WiFi.localIP().toString() + "</p>";
     resp += "<p class='info-text' id='system-uptime'>Uptime: " + time_string() + "</p>";
+    resp += "<p class='info-text' id='current-datarate'>Current Data Rate: <span id='datarate-value'>" + String(get_current_datarate()) + "</span> bps</p>";
     resp += "<p class='info-text'>Loop Count: " + String(loop_count) + "</p>";
     resp += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
     resp += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
@@ -1747,8 +2011,58 @@ void handle_config() {
     }
     resp += "<a href='/' class='action-button'>🏠 Main Page</a>";
     resp += "</div>";
-    resp += "</div>";
+
+    resp += "<h2>📡 Active Data Rates</h2>";
     
+    // Kompakte Badge-Anzeige
+    resp += "<div style='display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0;'>";
+    
+    if (config.proto_lacrosse) {
+        resp += "<span class='status-badge status-ok'>17.2k</span>";
+    }
+    if (config.proto_tx35it) {
+        resp += "<span class='status-badge status-ok'>9.6k</span>";
+    }
+    if (config.proto_tx38it) {
+        resp += "<span class='status-badge status-ok'>8.8k</span>";
+    }
+    if (config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh) {
+        resp += "<span class='status-badge status-ok'>6.6k</span>";
+    }
+    if (config.proto_w136) {
+        resp += "<span class='status-badge status-ok'>4.8k</span>";
+    }
+    
+    bool any_active = config.proto_lacrosse || config.proto_tx35it || config.proto_tx38it || 
+                      config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || config.proto_w136;
+    
+    if (!any_active) {
+        resp += "<span class='status-badge status-error'>⚠ None</span>";
+    }
+    
+    resp += "</div>";
+    int interval_sec = get_interval();
+    resp += "<span class='info-text' style='color: var(--secondary-text-color);'>(⟳ " + String(interval_sec) + "s)</span>";
+    resp += "</p>";
+    
+    resp += "</div>";
+
+    resp += "<div class='card'>";
+    resp += "<h2>🔄 Firmware Update</h2>";
+    resp += "<p class='info-text'>Current Version: <strong>" + String(LACROSSE2MQTT_VERSION) + "</strong></p>";
+    resp += "<div id='update-status' style='margin: 12px 0;'>";
+    resp += "<button onclick='checkForUpdate()' class='action-button' id='check-update-btn'>Check for Updates</button>";
+    resp += "</div>";
+    resp += "<div id='update-details' style='display: none; margin-top: 12px;'></div>";
+    resp += "<div id='update-progress-container' style='display: none; margin-top: 12px;'>";
+    resp += "<p class='info-text'>Installing update...</p>";
+    resp += "<div style='width: 100%; height: 20px; background: var(--divider-color); border-radius: 10px; overflow: hidden;'>";
+    resp += "<div id='update-progress-bar' style='width: 0%; height: 100%; background: var(--success-color); transition: width 0.3s;'></div>";
+    resp += "</div>";
+    resp += "<p id='update-progress-text' class='info-text' style='text-align: center; margin-top: 4px;'>0%</p>";
+    resp += "</div>";
+    resp += "</div>";
+
     resp += "</div>";
     
     resp += "<div class='card card-full'>";
@@ -2014,6 +2328,20 @@ void handle_config() {
     resp += "</div>";
     resp += "<div class='option-description'>Compact temperature/humidity sensors (4 bytes)</div>";
     resp += "</div>";
+
+    // W136
+    resp += "<div class='radio-group'>";
+    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>W136</h3>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_w136' value='1'";
+    if (config.proto_w136) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable W136 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Weather sensors (4.800 kbps)</div>";
+    resp += "</div>";
     
     resp += "</form>";
     resp += "</div>";
@@ -2219,11 +2547,14 @@ void setup_web()
     
     server.on("/", handle_index);
     server.on("/index.html", handle_index);
-    server.on("/sensors.json", handle_sensors_json);  // NEU!
+    server.on("/sensors.json", handle_sensors_json);
     server.on("/config.html", handle_config);
     server.on("/debug.html", handle_debug);
     server.on("/licenses.html", handle_licenses);
     server.on("/update", HTTP_GET, handle_update_page);
+    server.on("/check-update", handle_check_update);
+    server.on("/install-update", HTTP_POST, handle_install_update);
+    server.on("/update-progress", handle_update_progress);
     
     server.onNotFound([]() {
         server.send(404, "text/plain", "The content you are looking for was not found.\n");

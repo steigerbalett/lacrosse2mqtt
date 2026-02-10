@@ -6,6 +6,9 @@ This is a gateway to receive temperature and humidity from (868 MHz)
  * TX38IT - indoor temperature sensors
  * WS1600 - Weatherstations
  * WT440XH - temperature + humidity sensors
+ * TX22IT - Weatherstations
+ * W136 - Weatherstations
+ * EMT7110 - Energy
 
 and publish them to a MQTT broker.
 
@@ -35,7 +38,7 @@ On the config page, you can enter the hostname / IP of your MQTT broker. The top
  * Upload the bin file (follow the instuctions).
 
 ## Firmware update
-Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the release page.
+Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the [release page](https://github.com/steigerbalett/lacrosse2mqtt/releases).
 The software update can be uploaded via the "Update software" link from the configuration page
 
 ## Reset WiFi
@@ -59,9 +62,12 @@ The following libraries are needed for building (could all be installed via ardu
 
    * [Heltec Boards](https://resource.heltec.cn/download/package_heltec_esp32_index.json)
 
-## To do
-
 ## Nice2have
  * Add FHEM connector
  * Add update checker and online update
- * Maybe try to decode more sensors
+
+## Source/Idea
+This project uses code and protocol descriptions derived from
+[LaCrosseITPlusReader10](https://github.com/rinie/LaCrosseITPlusReader10),
+which itself is based on the LaCrosse IT+ Reader contributed to the
+[FHEM](https://fhem.de/) project. See `LICENSES.md` for details.

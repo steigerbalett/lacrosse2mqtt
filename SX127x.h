@@ -38,7 +38,7 @@ public:
     void SetupForLaCrosse();
     int GetDataRate();
     int8_t GetRSSI();
-    void SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842);
+    void SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842, bool rate_6618, bool rate_4800);
     void NextDataRate(byte idx = 0xff);
 };
 

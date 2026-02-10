@@ -29,6 +29,11 @@
 #include "ws1600.h"
 #include "wt440xh.h"
 #include "SX127x.h"
+#include "tx22it.h"
+#include "emt7110.h"
+#include "w136.h"
+#include "wh24.h"
+#include "wh25.h"
 #include <WiFiManager.h>
 
 #define FORMAT_LITTLEFS_IF_FAILED false
@@ -65,6 +70,14 @@ struct Star {
 Star stars[STAR_COUNT];
 
 SX127x SX(LORA_CS, LORA_RST);
+
+int get_current_datarate() {
+    return SX.GetDataRate();
+}
+
+int get_interval() {
+    return interval;
+}
 
 String wifi_disp;
 bool showing_starfield = false;
@@ -445,22 +458,59 @@ void pub_hass_battery_config(byte ID)
     mqtt_client.endPublish();
 }
 
-void expire_cache()
-{
+void expire_cache() {
     unsigned long now = millis();
+    
+    // Berechne dynamischen Timeout basierend auf aktivierten Protokollen
+    int active_protocols = 0;
+    if (config.proto_lacrosse) active_protocols++;
+    if (config.proto_tx35it) active_protocols++;
+    if (config.proto_tx38it) active_protocols++;
+    if (config.proto_wh1080) active_protocols++;
+    if (config.proto_ws1600) active_protocols++;
+    if (config.proto_wt440xh) active_protocols++;
+    if (config.proto_tx22it) active_protocols++;
+    if (config.proto_emt7110) active_protocols++;
+    if (config.proto_w136) active_protocols++;
+    if (config.proto_wh24) active_protocols++;
+    if (config.proto_wh25) active_protocols++;
+    
+    // Basis-Timeout: 5 Minuten + 1 Minute pro Protokoll
+    // Mindestens 5 Minuten, maximal 15 Minuten
+    unsigned long sensor_timeout = 300000 + (active_protocols * 60000);
+    if (sensor_timeout > 900000) sensor_timeout = 900000; // Max 15 Minuten
+    
+    if (config.debug_mode && now % 60000 < 100) { // Log alle 60 Sekunden
+        Serial.printf("Cache timeout: %lu ms (%d protocols active)\n", sensor_timeout, active_protocols);
+    }
+    
     for (int i = 0; i < SENSOR_NUM; i++) {
         // Kanal 1 Daten
-        if (fcache[i].timestamp > 0 && (now - fcache[i].timestamp) > 300000) {
+        if (fcache[i].timestamp > 0 && now - fcache[i].timestamp > sensor_timeout) {
+            if (config.debug_mode) {
+                Serial.printf("Expiring sensor ID %d (age: %lu ms)\n", fcache[i].ID, now - fcache[i].timestamp);
+            }
+            
             fcache[i].timestamp = 0;
             fcache[i].temp = 0;
             fcache[i].humi = 0;
             fcache[i].valid = false;
             fcache[i].batlo = false;
             fcache[i].init = false;
+            fcache[i].wind_speed = 0;
+            fcache[i].wind_direction = -1;
+            fcache[i].wind_gust = 0;
+            fcache[i].rain = 0;
+            fcache[i].rain_total = 0;
+            fcache[i].power = 0;
+            fcache[i].pressure = 0;
         }
         
         // Kanal 2 Daten
-        if (fcache[i].timestamp_ch2 > 0 && (now - fcache[i].timestamp_ch2) > 300000) {
+        if (fcache[i].timestamp_ch2 > 0 && now - fcache[i].timestamp_ch2 > sensor_timeout) {
+            if (config.debug_mode) {
+                Serial.printf("Expiring sensor ID %d CH2 (age: %lu ms)\n", fcache[i].ID, now - fcache[i].timestamp_ch2);
+            }
             fcache[i].timestamp_ch2 = 0;
             fcache[i].temp_ch2 = 0;
         }
@@ -705,6 +755,28 @@ void receive()
                 WH1080::DisplayFrame(payload, payLoadSize, &wh_frame);
                 
                 byte ID = wh_frame.ID;
+                int cacheIndex = ID;
+                if (cacheIndex >= 0 && cacheIndex < SENSOR_NUM) {
+                    fcache[cacheIndex].ID = ID;
+                    fcache[cacheIndex].temp = wh_frame.temp;
+                    fcache[cacheIndex].humi = wh_frame.humi;
+                    fcache[cacheIndex].wind_speed = wh_frame.wind_speed;
+                    fcache[cacheIndex].wind_gust = wh_frame.wind_gust;
+                    fcache[cacheIndex].rain_total = wh_frame.rain;
+                    fcache[cacheIndex].rssi = rssi;
+                    fcache[cacheIndex].rate = rate;
+                    fcache[cacheIndex].timestamp = millis();
+                    strncpy(fcache[cacheIndex].sensorType, "WH1080", 15);
+                    fcache[cacheIndex].sensorType[15] = '\0';
+            
+                    // ← WICHTIG: Windrichtung NUR setzen wenn gültig!
+                    if (wh_frame.wind_bearing >= 0 && wh_frame.wind_bearing <= 15) {
+                        fcache[cacheIndex].wind_direction = (int)(wh_frame.wind_bearing * 22.5f);
+                    } else {
+                        fcache[cacheIndex].wind_direction = -1;
+                    }
+                }
+                
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
@@ -740,7 +812,7 @@ void receive()
                     pub_hass_weather_config(3, ID);  // Rain
                     pub_hass_weather_config(4, ID);  // Wind Bearing
                 }
-                
+
                 frame_valid = true;
                 
                 if (config.debug_mode) {
@@ -759,6 +831,29 @@ void receive()
                 WS1600::DisplayFrame(payload, payLoadSize, &ws_frame);
                 
                 byte ID = ws_frame.ID;
+
+            int cacheIndex = ID;
+            if (cacheIndex >= 0 && cacheIndex < SENSOR_NUM) {
+                fcache[cacheIndex].ID = ID;
+                fcache[cacheIndex].channel = ws_frame.channel;
+                fcache[cacheIndex].temp = ws_frame.temp;
+                fcache[cacheIndex].humi = ws_frame.humi;
+                fcache[cacheIndex].wind_speed = ws_frame.wind_speed;
+                fcache[cacheIndex].rain_total = ws_frame.rain;
+                fcache[cacheIndex].rssi = rssi;
+                fcache[cacheIndex].rate = rate;
+                fcache[cacheIndex].batlo = ws_frame.batlo;
+                fcache[cacheIndex].timestamp = millis();
+                strncpy(fcache[cacheIndex].sensorType, "WS1600", 15);
+                fcache[cacheIndex].sensorType[15] = '\0';
+        
+                // Wind Direction: wsframe.winddirection ist 0-15
+                if (ws_frame.wind_direction >= 0 && ws_frame.wind_direction <= 15) {
+                    fcache[cacheIndex].wind_direction = (int)(ws_frame.wind_direction * 22.5f);
+                } else {
+                    fcache[cacheIndex].wind_direction = -1;
+                }
+            }
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
@@ -869,6 +964,182 @@ void receive()
                 }
             }
         }
+
+        // ========== VERSUCHE TX22IT PROTOKOLL ==========
+        if (!frame_valid && config.proto_tx22it && payLoadSize == 9) {
+            TX22IT::Frame tx22_frame;
+            tx22_frame.rssi = rssi;
+            tx22_frame.rate = rate;
+            
+            if (TX22IT::TryHandleData(payload, payLoadSize, &tx22_frame)) {
+                TX22IT::DisplayFrame(payload, payLoadSize, &tx22_frame);
+                
+                byte ID = tx22_frame.ID;
+
+                int cacheIndex = ID;
+    
+            if (cacheIndex >= 0 && cacheIndex < SENSOR_NUM) {
+                fcache[cacheIndex].ID = ID;
+                fcache[cacheIndex].channel = 1;
+                fcache[cacheIndex].temp = tx22_frame.temp;
+                fcache[cacheIndex].humi = tx22_frame.humi;
+                fcache[cacheIndex].wind_speed = tx22_frame.wind_speed;
+                fcache[cacheIndex].wind_gust = tx22_frame.wind_gust;
+                fcache[cacheIndex].rssi = rssi;
+                fcache[cacheIndex].rate = rate;
+                fcache[cacheIndex].batlo = tx22_frame.batlo;
+                fcache[cacheIndex].timestamp = millis();
+                strncpy(fcache[cacheIndex].sensorType, "TX22IT", 15);
+                fcache[cacheIndex].sensorType[15] = '\0';
+        
+                // Wind Direction: tx22_frame.winddirection ist direkt 0-360°
+                if (tx22_frame.wind_direction >= 0 && tx22_frame.wind_direction <= 360) {
+                    fcache[cacheIndex].wind_direction = (int)tx22_frame.wind_direction;
+                } else {
+                    fcache[cacheIndex].wind_direction = -1;
+                }
+            }
+
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                // Publish Weather Data
+                mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(tx22_frame.temp, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(tx22_frame.humi, DEC).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_speed").c_str(), String(tx22_frame.wind_speed, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_gust").c_str(), String(tx22_frame.wind_gust, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_bearing").c_str(), String(tx22_frame.wind_direction, 0).c_str());
+                mqtt_client.publish((mqttBaseTopic + "wind_direction").c_str(), GetWindDirectionText(tx22_frame.wind_direction));
+                
+                String state = "{\"RSSI\": " + String(rssi) + 
+                              ", \"batlo\": " + String(tx22_frame.batlo ? "true" : "false") + 
+                              ", \"type\": \"TX22IT\"}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                // Battery
+                int batteryPercent = tx22_frame.batlo ? 10 : 100;
+                mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
+                
+                // Home Assistant Discovery
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    pub_hass_config(1, ID, 1);  // Temperature
+                    pub_hass_config(0, ID, 1);  // Humidity
+                    pub_hass_weather_config(0, ID);  // Wind Speed
+                    pub_hass_weather_config(1, ID);  // Wind Direction
+                    pub_hass_weather_config(2, ID);  // Wind Gust
+                    pub_hass_weather_config(5, ID);  // Wind Bearing
+                    pub_hass_battery_config(ID);
+                }
+                
+                frame_valid = true;
+                
+                if (config.debug_mode) {
+                    Serial.printf("[MQTT] TX22IT ID=%d Name=%s\n", ID, sensorIdentifier.c_str());
+                }
+            }
+        }
+        
+        // ========== VERSUCHE EMT7110 PROTOKOLL ==========
+        if (!frame_valid && config.proto_emt7110 && payLoadSize == 9) {
+            EMT7110::Frame emt_frame;
+            emt_frame.rssi = rssi;
+            emt_frame.rate = rate;
+            
+            if (EMT7110::TryHandleData(payload, payLoadSize, &emt_frame)) {
+                EMT7110::DisplayFrame(payload, payLoadSize, &emt_frame);
+                
+                byte ID = emt_frame.ID;
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                // Publish Energy Data
+                mqtt_client.publish((mqttBaseTopic + "power").c_str(), String(emt_frame.power, 1).c_str());
+                mqtt_client.publish((mqttBaseTopic + "energy").c_str(), String(emt_frame.energy, 3).c_str());
+                
+                String state = "{\"RSSI\": " + String(rssi) + 
+                              ", \"batlo\": " + String(emt_frame.batlo ? "true" : "false") + 
+                              ", \"type\": \"EMT7110\"}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                // Battery
+                int batteryPercent = emt_frame.batlo ? 10 : 100;
+                mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
+                
+                // Home Assistant Discovery würde hier weitere Konfigurationen benötigen
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    pub_hass_battery_config(ID);
+                }
+                
+                frame_valid = true;
+                
+                if (config.debug_mode) {
+                    Serial.printf("[MQTT] EMT7110 ID=%d Name=%s\n", ID, sensorIdentifier.c_str());
+                }
+            }
+        }
+        
+        // ========== VERSUCHE W136 PROTOKOLL ==========
+        if (!frame_valid && config.proto_w136 && payLoadSize == 6) {
+            W136::Frame w136_frame;
+            w136_frame.rssi = rssi;
+            w136_frame.rate = rate;
+            
+            if (W136::TryHandleData(payload, payLoadSize, &w136_frame)) {
+                W136::DisplayFrame(payload, payLoadSize, &w136_frame);
+                
+                byte ID = w136_frame.ID;
+                String mqttBaseTopic;
+                String sensorIdentifier;
+                
+                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                    sensorIdentifier = id2name[ID];
+                    mqttBaseTopic = pretty_base + sensorIdentifier + "/";
+                } else {
+                    sensorIdentifier = String(ID, DEC);
+                    mqttBaseTopic = pub_base + sensorIdentifier + "/";
+                }
+                
+                // Publish Rain Data
+                mqtt_client.publish((mqttBaseTopic + "rain").c_str(), String(w136_frame.rain, 1).c_str());
+                
+                String state = "{\"RSSI\": " + String(rssi) + 
+                              ", \"batlo\": " + String(w136_frame.batlo ? "true" : "false") + 
+                              ", \"type\": \"W136\"}";
+                mqtt_client.publish((mqttBaseTopic + "state").c_str(), state.c_str());
+                
+                // Battery
+                int batteryPercent = w136_frame.batlo ? 10 : 100;
+                mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
+                
+                // Home Assistant Discovery
+                if (config.ha_discovery && id2name[ID].length() > 0) {
+                    pub_hass_weather_config(3, ID);  // Rain
+                    pub_hass_battery_config(ID);
+                }
+                
+                frame_valid = true;
+                
+                if (config.debug_mode) {
+                    Serial.printf("[MQTT] W136 ID=%d Name=%s\n", ID, sensorIdentifier.c_str());
+                }
+            }
+        }
         
         // Falls kein Protokoll erkannt wurde
         if (!frame_valid) {
@@ -890,6 +1161,11 @@ void setup(void)
     char tmp[32];
     snprintf(tmp, 31, "lacrosse2mqtt_%06lX", (long)(ESP.getEfuseMac() >> 24));
     mqtt_id = String(tmp);
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        memset(&fcache[i], 0, sizeof(Cache));  // Alles auf 0
+        fcache[i].wind_direction = -1;         // ← WICHTIG: Ungültig markieren
+        fcache[i].ID = 0xFF;                   // Ungültige ID
+    }
     config.mqtt_port = 1883;
     Serial.begin(115200);
 
@@ -960,7 +1236,9 @@ void setup(void)
     bool use_17241 = config.proto_lacrosse;
     bool use_9579 = config.proto_tx35it;
     bool use_8842 = config.proto_tx38it;
-    SX.SetActiveDataRates(use_17241, use_9579, use_8842);
+    bool use_6618 = config.proto_wh1080;
+    bool use_4800 = config.proto_tx22it;
+    SX.SetActiveDataRates(use_17241, use_9579, use_8842, use_6618, use_4800);
 
     SX.SetupForLaCrosse();
     SX.SetFrequency(freq);
