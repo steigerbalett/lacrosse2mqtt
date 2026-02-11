@@ -100,11 +100,6 @@ struct Cache {
     unsigned long pressure_timestamp;
 };
 
-// Hilfsfunktion für Cache-Index
-static inline int GetCacheIndex(byte ID, byte channel) {
-    return ID;
-}
-
 struct Config {
     String mqtt_server;
     int mqtt_port;

@@ -1,14 +1,18 @@
 # LaCrosse to MQTT gateway
 
 This is a gateway to receive temperature and humidity from (868 MHz)
- * LaCrosse IT+ temperature + humidity sensors
+ * LaCrosse IT+ - temperature + humidity sensors
  * WH1080 - Weatherstations
- * TX38IT - indoor temperature sensors
+ * TX35-IT - temperature + humidity sensors
+ * TX38-IT - indoor temperature sensors
+ * WH1080 - Weatherstations
  * WS1600 - Weatherstations
  * WT440XH - temperature + humidity sensors
- * TX22IT - Weatherstations
+ * TX22-IT - Weatherstations
  * W136 - Weatherstations
- * EMT7110 - Energy
+ * EMT7110 - Energy Meter
+ * WH24 - Weathersensor
+ * WH25 - Pressure Sensor
 
 and publish them to a MQTT broker.
 
@@ -38,6 +42,8 @@ On the config page, you can enter the hostname / IP of your MQTT broker. The top
  * Upload the bin file (follow the instuctions).
 
 ## Firmware update
+Use the buildin Online Firmware Updater
+Or:
 Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the [release page](https://github.com/steigerbalett/lacrosse2mqtt/releases).
 The software update can be uploaded via the "Update software" link from the configuration page
 
@@ -64,8 +70,6 @@ The following libraries are needed for building (could all be installed via ardu
 
 ## Nice2have
  * Add FHEM connector
- * Avoid 0.000kbs decode
- * Avoid send ID data over MQTT if name is chosen
 
 ## Know problems
 
