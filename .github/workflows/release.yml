@@ -36,9 +36,20 @@ jobs:
           pip install --upgrade platformio
           pio --version
           
+      - name: Verify source files
+        run: |
+          echo "Checking for main source file..."
+          if [ ! -f "lacrosse2mqtt.ino" ]; then
+            echo "Error: lacrosse2mqtt.ino not found!"
+            exit 1
+          fi
+          echo "✓ Source files found"
+          ls -la *.ino *.cpp *.h
+          
       - name: Build firmware
         run: |
-          pio run --environment ttgo-lora32-v21
+          echo "Starting PlatformIO build..."
+          pio run --environment ttgo-lora32-v21 --verbose
           
       - name: Find and rename binary
         run: |
@@ -46,15 +57,19 @@ jobs:
           FIRMWARE_PATH=".pio/build/ttgo-lora32-v21/firmware.bin"
           OUTPUT_NAME="lacrosse2mqtt.${{ github.ref_name }}.bin"
           
+          echo "Looking for firmware at: $FIRMWARE_PATH"
+          
           if [ ! -f "$FIRMWARE_PATH" ]; then
             echo "Error: Firmware not found at $FIRMWARE_PATH"
-            ls -la .pio/build/
+            echo "Build directory contents:"
+            ls -laR .pio/build/ || echo "Build directory doesn't exist"
             exit 1
           fi
           
           cp "$FIRMWARE_PATH" "$OUTPUT_NAME"
-          echo "Created: $OUTPUT_NAME"
+          echo "✓ Created: $OUTPUT_NAME"
           ls -lh "$OUTPUT_NAME"
+          sha256sum "$OUTPUT_NAME"
           
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -63,19 +78,38 @@ jobs:
           body: |
             ## LaCrosse2MQTT ${{ github.ref_name }}
             
-            ### Installation
+            ### Installation Methods
+            
+            #### Method 1: Web Interface (Recommended)
             1. Download the `.bin` file below
-            2. Go to your device web interface
-            3. Navigate to Configuration → Updates
-            4. Click "Check for Updates" to install automatically
-            5. Or upload manually via the `/update` endpoint
+            2. Open your device's web interface (http://lacrosse2mqtt.local or device IP)
+            3. Navigate to **Configuration → Updates**
+            4. Click **"Check for Updates"** - it will automatically detect and install this version
+            
+            #### Method 2: Manual Upload
+            1. Download the `.bin` file below
+            2. Go to http://your-device-ip/update
+            3. Select the downloaded file and upload
             
             ### Hardware Support
-            - TTGO LoRa32 V2.1
-            - Heltec WiFi LoRa 32 (V2)
+            - ✅ TTGO LoRa32 V2.1
+            - ✅ Heltec WiFi LoRa 32 (V2)
+            
+            ### Build Information
+            - **Platform:** ESP32
+            - **Framework:** Arduino
+            - **Build Date:** ${{ github.event.head_commit.timestamp }}
+            - **Commit:** ${{ github.sha }}
+            
+            ### Supported Sensors
+            - LaCrosse TX sensors
+            - WH1080 weather stations
+            - TX35/TX38 IT sensors
+            - WS1600 weather stations
+            - And more...
             
             ### Changes
-            See commit history for details
+            See [commit history](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) for details.
           draft: false
           prerelease: false
         env:

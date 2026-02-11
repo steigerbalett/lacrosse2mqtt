@@ -2126,6 +2126,10 @@ void handle_config() {
         bool new_ws1600 = (server.hasArg("proto_ws1600") && server.arg("proto_ws1600") == "1");
         bool new_wt440xh = (server.hasArg("proto_wt440xh") && server.arg("proto_wt440xh") == "1");
         bool new_w136 = (server.hasArg("proto_w136") && server.arg("proto_w136") == "1");
+        bool new_tx22it = (server.hasArg("proto_tx22it") && server.arg("proto_tx22it") == "1");
+        bool new_emt7110 = (server.hasArg("proto_emt7110") && server.arg("proto_emt7110") == "1");
+        bool new_wh24 = (server.hasArg("proto_wh24") && server.arg("proto_wh24") == "1");
+        bool new_wh25 = (server.hasArg("proto_wh25") && server.arg("proto_wh25") == "1");
         
         // Prüfe auf Änderungen und update
         if (new_lacrosse != config.proto_lacrosse) {
@@ -2169,6 +2173,30 @@ void handle_config() {
             config_changed = true;
             config.changed = true;
             Serial.println("W136 protocol changed to: " + String(config.proto_w136));
+        }
+        if (new_tx22it != config.proto_tx22it) {
+            config.proto_tx22it = new_tx22it;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("TX22IT protocol changed to: " + String(config.proto_tx22it));
+        }
+        if (new_emt7110 != config.proto_emt7110) {
+            config.proto_emt7110 = new_emt7110;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("EMT7110 protocol changed to: " + String(config.proto_emt7110));
+        }
+        if (new_wh24 != config.proto_wh24) {
+            config.proto_wh24 = new_wh24;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WH24 protocol changed to: " + String(config.proto_wh24));
+        }
+        if (new_wh25 != config.proto_wh25) {
+            config.proto_wh25 = new_wh25;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WH25 protocol changed to: " + String(config.proto_wh25));
         }
     }
     
@@ -2244,7 +2272,7 @@ void handle_config() {
     // Kompakte Badge-Anzeige
     resp += "<div style='display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0;'>";
     
-    if (config.proto_lacrosse) {
+    if (config.proto_lacrosse || config.proto_wh24 || config.proto_wh25) {
         resp += "<span class='status-badge status-ok'>17.2k</span>";
     }
     if (config.proto_tx35it) {
@@ -2253,7 +2281,7 @@ void handle_config() {
     if (config.proto_tx38it) {
         resp += "<span class='status-badge status-ok'>8.8k</span>";
     }
-    if (config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh) {
+    if (config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || config.proto_tx22it || config.proto_emt7110) {
         resp += "<span class='status-badge status-ok'>6.6k</span>";
     }
     if (config.proto_w136) {
@@ -2261,7 +2289,9 @@ void handle_config() {
     }
     
     bool any_active = config.proto_lacrosse || config.proto_tx35it || config.proto_tx38it || 
-                      config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || config.proto_w136;
+                      config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || 
+                      config.proto_w136 || config.proto_tx22it || config.proto_emt7110 ||
+                      config.proto_wh24 || config.proto_wh25;
     
     if (!any_active) {
         resp += "<span class='status-badge status-error'>⚠ None</span>";
@@ -2467,14 +2497,20 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
 
+    // ZEILE ~2120 - Kompletter Ersatz der Protokoll-Sektion:
+
     resp += "<div class='card'>";
     resp += "<h2>📡 Protocol Settings</h2>";
-    resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Changes require saving configuration.</p>";
+    resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Protocols are grouped by data rate. Changes require saving configuration.</p>";
     resp += "<form action='/config.html'>";
+    
+    // ========== 17.241 kbps ==========
+    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(3, 169, 244, 0.05); border-radius: 8px; border-left: 4px solid var(--primary-color);'>";
+    resp += "<h3 style='margin: 0 0 12px 0; color: var(--primary-color); font-size: 16px;'>⚡ 17.241 kbps</h3>";
     
     // LaCrosse IT+
     resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>LaCrosse IT+</h3>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>LaCrosse IT+</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
     resp += "<input type='checkbox' name='proto_lacrosse' value='1'";
@@ -2483,40 +2519,46 @@ void handle_config() {
     resp += "Enable LaCrosse IT+ Protocol";
     resp += "</label>";
     resp += "</div>";
-    resp += "<div class='option-description'>TX29-IT, TX27-IT, TX25-U, TX29DTH-IT (17.241 kbps)</div>";
+    resp += "<div class='option-description'>TX29-IT, TX27-IT, TX25-U, TX29DTH-IT sensors (17.241 kbps)</div>";
     resp += "</div>";
     
-    // WH1080
-    resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WH1080 Weather Station</h3>";
+    // WH24
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH24 Weather Sensor</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
-    resp += "<input type='checkbox' name='proto_wh1080' value='1'";
-    if (config.proto_wh1080) resp += checked;
+    resp += "<input type='checkbox' name='proto_wh24' value='1'";
+    if (config.proto_wh24) resp += checked;
     resp += " onchange='this.form.submit()'>";
-    resp += "Enable WH1080 Protocol";
+    resp += "Enable WH24 Protocol";
     resp += "</label>";
     resp += "</div>";
-    resp += "<div class='option-description'>Weather stations with wind, rain, and temperature data (10 bytes)</div>";
+    resp += "<div class='option-description'>WH24 outdoor sensor at 868.300 MHz (17.241 kbps)</div>";
     resp += "</div>";
     
-    // TX38IT
-    resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>TX38IT Indoor</h3>";
+    // WH25
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH25 Pressure Sensor</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
-    resp += "<input type='checkbox' name='proto_tx38it' value='1'";
-    if (config.proto_tx38it) resp += checked;
+    resp += "<input type='checkbox' name='proto_wh25' value='1'";
+    if (config.proto_wh25) resp += checked;
     resp += " onchange='this.form.submit()'>";
-    resp += "Enable TX38IT Protocol";
+    resp += "Enable WH25 Protocol";
     resp += "</label>";
     resp += "</div>";
-    resp += "<div class='option-description'>Indoor temperature sensors (8.842 kbps)</div>";
+    resp += "<div class='option-description'>WH25 barometric pressure sensor at 868.300 MHz (17.241 kbps)</div>";
     resp += "</div>";
+    
+    resp += "</div>"; // Ende 17.241 kbps Gruppe
+    
+    // ========== 9.579 kbps ==========
+    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(76, 175, 80, 0.05); border-radius: 8px; border-left: 4px solid var(--success-color);'>";
+    resp += "<h3 style='margin: 0 0 12px 0; color: var(--success-color); font-size: 16px;'>⚡ 9.579 kbps</h3>";
     
     // TX35IT
     resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>TX35-IT/TX35DTH-IT</h3>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TX35-IT/TX35DTH-IT</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
     resp += "<input type='checkbox' name='proto_tx35it' value='1'";
@@ -2527,10 +2569,50 @@ void handle_config() {
     resp += "</div>";
     resp += "<div class='option-description'>TX35-IT, TX35DTH-IT sensors (9.579 kbps)</div>";
     resp += "</div>";
-
-    // WS1600
+    
+    resp += "</div>"; // Ende 9.579 kbps Gruppe
+    
+    // ========== 8.842 kbps ==========
+    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(255, 152, 0, 0.05); border-radius: 8px; border-left: 4px solid var(--warning-color);'>";
+    resp += "<h3 style='margin: 0 0 12px 0; color: var(--warning-color); font-size: 16px;'>⚡ 8.842 kbps</h3>";
+    
+    // TX38IT
     resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WS1600 Weather</h3>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TX38-IT Indoor</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tx38it' value='1'";
+    if (config.proto_tx38it) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable TX38-IT Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TX38-IT indoor temperature sensors (8.842 kbps)</div>";
+    resp += "</div>";
+    
+    resp += "</div>"; // Ende 8.842 kbps Gruppe
+    
+    // ========== 6.618 kbps ==========
+    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(33, 150, 243, 0.05); border-radius: 8px; border-left: 4px solid var(--info-color);'>";
+    resp += "<h3 style='margin: 0 0 12px 0; color: var(--info-color); font-size: 16px;'>⚡ 6.618 kbps</h3>";
+    
+    // WH1080
+    resp += "<div class='radio-group'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH1080 Weather Station</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wh1080' value='1'";
+    if (config.proto_wh1080) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WH1080 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>Complete weather stations with wind, rain, temperature data (6.618 kbps)</div>";
+    resp += "</div>";
+    
+    // WS1600
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WS1600 Weather</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
     resp += "<input type='checkbox' name='proto_ws1600' value='1'";
@@ -2539,12 +2621,12 @@ void handle_config() {
     resp += "Enable WS1600 Protocol";
     resp += "</label>";
     resp += "</div>";
-    resp += "<div class='option-description'>Weather sensors (9 bytes)</div>";
+    resp += "<div class='option-description'>WS1600 weather sensors (6.618 kbps)</div>";
     resp += "</div>";
     
     // WT440XH
-    resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>WT440XH Temp/Humidity</h3>";
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WT440XH Temp/Humidity</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
     resp += "<input type='checkbox' name='proto_wt440xh' value='1'";
@@ -2553,12 +2635,46 @@ void handle_config() {
     resp += "Enable WT440XH Protocol";
     resp += "</label>";
     resp += "</div>";
-    resp += "<div class='option-description'>Compact temperature/humidity sensors (4 bytes)</div>";
+    resp += "<div class='option-description'>Compact temperature/humidity sensors (6.618 kbps)</div>";
     resp += "</div>";
-
+    
+    // TX22IT
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TX22-IT Weather Station</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tx22it' value='1'";
+    if (config.proto_tx22it) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable TX22-IT Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TX22-IT complete weather station (6.618 kbps)</div>";
+    resp += "</div>";
+    
+    // EMT7110
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>EMT7110 Energy Meter</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_emt7110' value='1'";
+    if (config.proto_emt7110) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable EMT7110 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>EMT7110 energy meter with power/energy data (6.618 kbps)</div>";
+    resp += "</div>";
+    
+    resp += "</div>"; // Ende 6.618 kbps Gruppe
+    
+    // ========== 4.800 kbps ==========
+    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(156, 39, 176, 0.05); border-radius: 8px; border-left: 4px solid #9c27b0;'>";
+    resp += "<h3 style='margin: 0 0 12px 0; color: #9c27b0; font-size: 16px;'>⚡ 4.800 kbps</h3>";
+    
     // W136
     resp += "<div class='radio-group'>";
-    resp += "<h3 style='margin: 8px 0; font-size: 14px; color: var(--primary-color);'>W136</h3>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>W136</h4>";
     resp += "<div class='radio-item'>";
     resp += "<label>";
     resp += "<input type='checkbox' name='proto_w136' value='1'";
@@ -2567,11 +2683,14 @@ void handle_config() {
     resp += "Enable W136 Protocol";
     resp += "</label>";
     resp += "</div>";
-    resp += "<div class='option-description'>Weather sensors (4.800 kbps)</div>";
+    resp += "<div class='option-description'>W136 weather sensors at 869.820 MHz (4.800 kbps)</div>";
     resp += "</div>";
+    
+    resp += "</div>"; // Ende 4.800 kbps Gruppe
     
     resp += "</form>";
     resp += "</div>";
+
 
     resp += "</div>";
     
