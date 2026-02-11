@@ -70,7 +70,7 @@ void LaCrosse::DecodeFrame(byte *bytes, struct Frame *f)
     }
 }
 
-// NEU: TX141/TX145 Protokoll Dekodierung
+// TX141/TX145 Protokoll Dekodierung
 bool LaCrosse::DecodeTX141Frame(byte *bytes, struct Frame *f)
 {
     memset(f, 0, sizeof(*f));
@@ -211,7 +211,7 @@ bool LaCrosse::TryHandleData(byte *data, struct Frame *f)
         return f->valid;
     }
     
-    // NEU: TX141/TX145 oder andere alternative Protokolle (NICHT 0x9X)
+    // TX141/TX145 oder andere alternative Protokolle (NICHT 0x9X)
     // Diese werden als TX141 behandelt
     return DecodeTX141Frame(data, f);
 }

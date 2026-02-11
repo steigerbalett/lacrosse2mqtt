@@ -566,6 +566,17 @@ void expire_cache() {
         Serial.printf("Cache timeout: %lu ms (%d protocols active)\n", sensor_timeout, active_protocols);
     }
     
+    // Bereinige Sensoren mit ungültiger Datenrate
+    for (int i = 0; i < SENSOR_NUM; i++) {
+        if (fcache[i].timestamp > 0 && fcache[i].rate == 0) {
+            if (config.debug_mode) {
+                Serial.printf("[CLEANUP] Removing sensor ID %d with invalid rate=0\n", fcache[i].ID);
+            }
+            fcache[i].timestamp = 0;
+            fcache[i].valid = false;
+        }
+    }
+
     for (int i = 0; i < SENSOR_NUM; i++) {
         // Kanal 1 Daten
         if (fcache[i].timestamp > 0 && now - fcache[i].timestamp > sensor_timeout) {
@@ -640,7 +651,9 @@ void update_display(LaCrosse::Frame *frame)
         unsigned long newestTime = 0;
         
         for (int id = 0; id < SENSOR_NUM; id++) {
-            if (fcache[id].timestamp > 0 && fcache[id].valid && fcache[id].timestamp > newestTime) {
+            // Filter: Ignoriere Sensoren mit rate=0
+            if (fcache[id].timestamp > 0 && fcache[id].valid && 
+                fcache[id].rate > 0 && fcache[id].timestamp > newestTime) {
                 newestTime = fcache[id].timestamp;
                 newestID = id;
             }
@@ -698,6 +711,16 @@ void receive()
     rssi = SX.GetRSSI();
     rate = SX.GetDataRate();
     payload = SX.GetPayloadPointer();
+
+    // ===== Filter für ungültige Datenrate =====
+    if (rate == 0) {
+        if (config.debug_mode) {
+            Serial.println("[FILTER] Frame rejected: Invalid data rate (0)");
+        }
+        SX.EnableReceiver(true);
+        digitalWrite(LED_BUILTIN, LOW);
+        return;
+    }
 
     if (config.debug_mode) {
         Serial.print("\n[DEBUG] End receiving, HEX raw data: ");
@@ -765,24 +788,25 @@ void receive()
         
         LaCrosse::DisplayFrame(payload, &lacrosse_frame);
         
-        // MQTT Publishing
+        // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics (nie beides)
         String mqttBaseTopic;
         String sensorIdentifier;
-        String batteryTopic;
-        String tempTopic;
-
-        if (config.mqtt_use_names && id2name[ID].length() > 0) {
+        
+        // Entscheidung: Welche Topic-Struktur verwenden?
+        bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+        
+        if (use_name_topics) {
+            // Verwende AUSSCHLIESSLICH Named Topics
             sensorIdentifier = id2name[ID];
             mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-            batteryTopic = mqttBaseTopic + "battery";
-            tempTopic = mqttBaseTopic + (channel == 2 ? "temp_ch2" : "temp");
         } else {
+            // Verwende AUSSCHLIESSLICH ID Topics
             sensorIdentifier = String(ID, DEC);
             mqttBaseTopic = pub_base + sensorIdentifier + "/";
-            batteryTopic = mqttBaseTopic + "battery";
-            tempTopic = mqttBaseTopic + (channel == 2 ? "temp_ch2" : "temp");
         }
 
+        // Alle Publishes verwenden das gewählte mqttBaseTopic
+        String tempTopic = mqttBaseTopic + (channel == 2 ? "temp_ch2" : "temp");
         mqtt_client.publish(tempTopic.c_str(), String(lacrosse_frame.temp, 1).c_str());
         
         if (channel == 1 && lacrosse_frame.humi > 0 && lacrosse_frame.humi <= 100) {
@@ -802,7 +826,7 @@ void receive()
         
         if (channel == 1) {
             int batteryPercent = lacrosse_frame.batlo ? 10 : 100;
-            mqtt_client.publish(batteryTopic.c_str(), String(batteryPercent).c_str());
+            mqtt_client.publish((mqttBaseTopic + "battery").c_str(), String(batteryPercent).c_str());
         }
         
         // Home Assistant Discovery
@@ -859,17 +883,20 @@ void receive()
                     }
                 }
                 
+                // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+                
+                if (use_name_topics) {
                     sensorIdentifier = id2name[ID];
                     mqttBaseTopic = pretty_base + sensorIdentifier + "/";
                 } else {
                     sensorIdentifier = String(ID, DEC);
                     mqttBaseTopic = pub_base + sensorIdentifier + "/";
                 }
-                
+
                 // Publish Weather Data
                 mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(wh_frame.temp, 1).c_str());
                 mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(wh_frame.humi, DEC).c_str());
@@ -936,17 +963,20 @@ void receive()
                     fcache[cacheIndex].wind_direction = -1;
                 }
             }
+                // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+                
+                if (use_name_topics) {
                     sensorIdentifier = id2name[ID];
                     mqttBaseTopic = pretty_base + sensorIdentifier + "/";
                 } else {
                     sensorIdentifier = String(ID, DEC);
                     mqttBaseTopic = pub_base + sensorIdentifier + "/";
                 }
-                
+
                 // Publish Weather Data
                 mqtt_client.publish((mqttBaseTopic + "temp").c_str(), String(ws_frame.temp, 1).c_str());
                 mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(ws_frame.humi, DEC).c_str());
@@ -999,20 +1029,23 @@ void receive()
                 
                 byte ID = wt_frame.ID;
                 byte channel = wt_frame.channel;
+                
+                // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics
                 String mqttBaseTopic;
                 String sensorIdentifier;
-                String tempTopic;
                 
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+                
+                if (use_name_topics) {
                     sensorIdentifier = id2name[ID];
                     mqttBaseTopic = pretty_base + sensorIdentifier + "/";
-                    tempTopic = mqttBaseTopic + (channel == 2 ? "temp_ch2" : "temp");
                 } else {
                     sensorIdentifier = String(ID, DEC);
                     mqttBaseTopic = pub_base + sensorIdentifier + "/";
-                    tempTopic = mqttBaseTopic + (channel == 2 ? "temp_ch2" : "temp");
                 }
                 
+                String tempTopic = mqttBaseTopic + (channel == 2 ? "temp_ch2" : "temp");
+
                 // Publish Sensor Data
                 mqtt_client.publish(tempTopic.c_str(), String(wt_frame.temp, 1).c_str());
                 mqtt_client.publish((mqttBaseTopic + "humi").c_str(), String(wt_frame.humi, DEC).c_str());
@@ -1082,10 +1115,13 @@ void receive()
                 }
             }
 
+                // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+                
+                if (use_name_topics) {
                     sensorIdentifier = id2name[ID];
                     mqttBaseTopic = pretty_base + sensorIdentifier + "/";
                 } else {
@@ -1139,10 +1175,14 @@ void receive()
                 EMT7110::DisplayFrame(payload, payLoadSize, &emt_frame);
                 
                 byte ID = emt_frame.ID;
+              
+                // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+                
+                if (use_name_topics) {
                     sensorIdentifier = id2name[ID];
                     mqttBaseTopic = pretty_base + sensorIdentifier + "/";
                 } else {
@@ -1186,10 +1226,13 @@ void receive()
                 W136::DisplayFrame(payload, payLoadSize, &w136_frame);
                 
                 byte ID = w136_frame.ID;
+                // MQTT Publishing - ENTWEDER Named Topics ODER ID Topics
                 String mqttBaseTopic;
                 String sensorIdentifier;
                 
-                if (config.mqtt_use_names && id2name[ID].length() > 0) {
+                bool use_name_topics = (config.mqtt_use_names && id2name[ID].length() > 0);
+                
+                if (use_name_topics) {
                     sensorIdentifier = id2name[ID];
                     mqttBaseTopic = pretty_base + sensorIdentifier + "/";
                 } else {

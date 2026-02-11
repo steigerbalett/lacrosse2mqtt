@@ -127,6 +127,10 @@ bool load_config()
     config.proto_ws1600 = false;
     config.proto_wt440xh = false;
     config.proto_w136 = false;
+    config.proto_tx22it = false;
+    config.proto_emt7110 = false;  
+    config.proto_wh24 = false;
+    config.proto_wh25 = false;
     
     if (!littlefs_ok)
         return false;
@@ -166,7 +170,6 @@ bool load_config()
         if (!doc["mqtt_use_names"].isNull()) {
             config.mqtt_use_names = doc["mqtt_use_names"];
         }
-        
         if (!doc["proto_lacrosse"].isNull())
             config.proto_lacrosse = doc["proto_lacrosse"];
         if (!doc["proto_wh1080"].isNull())
@@ -181,6 +184,14 @@ bool load_config()
             config.proto_wt440xh = doc["proto_wt440xh"];
         if (!doc["proto_w136"].isNull())
             config.proto_w136 = doc["proto_w136"];
+        if (!doc["proto_tx22it"].isNull())          // NEU
+            config.proto_tx22it = doc["proto_tx22it"];
+        if (!doc["proto_emt7110"].isNull())         // NEU
+            config.proto_emt7110 = doc["proto_emt7110"];
+        if (!doc["proto_wh24"].isNull())            // NEU
+            config.proto_wh24 = doc["proto_wh24"];
+        if (!doc["proto_wh25"].isNull())            // NEU
+            config.proto_wh25 = doc["proto_wh25"];
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -198,6 +209,10 @@ bool load_config()
         Serial.println("proto_ws1600: " + String(config.proto_ws1600));
         Serial.println("proto_wt440xh: " + String(config.proto_wt440xh));
         Serial.println("proto_w136: " + String(config.proto_w136));
+        Serial.println("proto_tx22it: " + String(config.proto_tx22it));
+        Serial.println("proto_emt7110: " + String(config.proto_emt7110));
+        Serial.println("proto_wh24: " + String(config.proto_wh24));
+        Serial.println("proto_wh25: " + String(config.proto_wh25));
     }
     
     cfg.close();
@@ -233,6 +248,10 @@ bool save_config()
     doc["proto_ws1600"] = config.proto_ws1600;
     doc["proto_wt440xh"] = config.proto_wt440xh;
     doc["proto_w136"] = config.proto_w136;
+    doc["proto_tx22it"] = config.proto_tx22it;      // NEU
+    doc["proto_emt7110"] = config.proto_emt7110;    // NEU
+    doc["proto_wh24"] = config.proto_wh24;          // NEU
+    doc["proto_wh25"] = config.proto_wh25;          // NEU
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -439,8 +458,10 @@ void add_current_table(String &s, bool rawdata)
     bool hasPower = false;
     bool hasPressure = false;
     
-    for (int i = 0; i < SENSOR_NUM; i++) {
-        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
+    for (int i = 0; i < SENSOR_NUM; i++)
+    {
+        // Filter: Überspringe ungültige, gelöschte oder rate=0 Sensoren
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF || fcache[i].rate == 0)
             continue;
             
         if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100)
@@ -664,7 +685,8 @@ void handle_sensors_json() {
     
     int sensorCount = 0;
     for (int i = 0; i < SENSOR_NUM; i++) {
-        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF)
+        // Filter: Überspringe ungültige, gelöschte oder rate=0 Sensoren
+        if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF || fcache[i].rate == 0)
             continue;
         
         JsonObject sensor = sensors.add<JsonObject>();
@@ -739,7 +761,7 @@ void handle_sensors_json() {
     }
     
     doc["count"] = sensorCount;
-//    doc["loop_count"] = loop_count;
+    doc["loop_count"] = loop_count;
     doc["uptime"] = time_string();
     doc["mqtt_ok"] = mqtt_ok;
     doc["wifi_ok"] = (WiFi.status() == WL_CONNECTED);
@@ -1071,6 +1093,44 @@ static void add_header(String &s, const String &title)
 "});"
 "}"
 
+    // Highlight datarate
+        "function updateActiveDatarate(){"
+    "fetch('/api/system')"
+    ".then(r=>{"
+    "if(!r.ok)throw new Error('HTTP '+r.status);"
+    "return r.json();"
+    "})"
+    ".then(d=>{"
+    "if(!d.current_datarate){"
+    "console.warn('No datarate in response');"
+    "return;"
+    "}"
+    "const cr=d.current_datarate;"
+    "const k=(cr/1000.0).toFixed(3);"
+    "const b=document.getElementById('active-datarate');"
+    "if(b){"
+    "b.textContent=k+' kbps';"
+    "b.style.animation='none';"
+    "setTimeout(()=>b.style.animation='',10);"
+    "}"
+    "document.querySelectorAll('.datarate-item').forEach(it=>{"
+    "const ir=parseFloat(it.getAttribute('data-rate'));"
+    "if(Math.abs(ir-cr)<10){"
+    "it.classList.add('active');"
+    "}else{"
+    "it.classList.remove('active');"
+    "}"
+    "});"
+    "}).catch(e=>{"
+    "console.error('Datarate fetch failed:',e);"
+    "const b=document.getElementById('active-datarate');"
+    "if(b)b.textContent='Error';"
+    "});"
+    "}\n"
+    
+    "let datarateInterval=setInterval(updateActiveDatarate,2000);\n"
+    "updateActiveDatarate();\n"
+ 
     "</script>";
     }
     
@@ -1617,6 +1677,55 @@ static void add_header(String &s, const String &title)
         "color: var(--info-color); "
         "font-weight: 500; "
     "}";
+
+    // Styles für Datenrate-Highlighting =====
+    s += ".info-item-highlight {\n";
+    s += "  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n";
+    s += "  border-radius: 8px;\n";
+    s += "  padding: 12px;\n";
+    s += "  box-shadow: 0 4px 6px rgba(0,0,0,0.1);\n";
+    s += "  animation: pulse-glow 2s ease-in-out infinite;\n";
+    s += "}\n";
+    s += ".info-item-highlight strong {\n";
+    s += "  color: #ffffff;\n";
+    s += "}\n";
+    s += ".datarate-badge {\n";
+    s += "  background: rgba(255,255,255,0.2);\n";
+    s += "  color: #ffffff;\n";
+    s += "  padding: 4px 12px;\n";
+    s += "  border-radius: 20px;\n";
+    s += "  font-weight: bold;\n";
+    s += "  font-size: 1.1em;\n";
+    s += "  display: inline-block;\n";
+    s += "  margin-left: 8px;\n";
+    s += "}\n";
+    s += "@keyframes pulse-glow {\n";
+    s += "  0%, 100% { box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 0 20px rgba(102,126,234,0.3); }\n";
+    s += "  50% { box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 0 30px rgba(102,126,234,0.6); }\n";
+    s += "}\n";
+    
+    // Styles für Datenraten-Liste
+    s += ".datarate-list {\n";
+    s += "  display: flex;\n";
+    s += "  gap: 10px;\n";
+    s += "  flex-wrap: wrap;\n";
+    s += "  margin-top: 10px;\n";
+    s += "}\n";
+    s += ".datarate-item {\n";
+    s += "  padding: 8px 16px;\n";
+    s += "  border-radius: 6px;\n";
+    s += "  background: #f0f0f0;\n";
+    s += "  border: 2px solid #ddd;\n";
+    s += "  transition: all 0.3s ease;\n";
+    s += "}\n";
+    s += ".datarate-item.active {\n";
+    s += "  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n";
+    s += "  color: white;\n";
+    s += "  border-color: #667eea;\n";
+    s += "  font-weight: bold;\n";
+    s += "  transform: scale(1.05);\n";
+    s += "  box-shadow: 0 4px 12px rgba(102,126,234,0.4);\n";
+    s += "}\n";
     
     s += "</style>";
     s += "<title>" + title + "</title></head>";
@@ -1736,7 +1845,6 @@ void handle_index()
     index += "<h2>Quick Actions</h2>";
     index += "<div class='action-buttons'>";
     index += "<a href='/config.html' class='action-button'>⚙️ Configuration</a>";
-    index += "<a href='/update' class='action-button'>📦 Update Firmware</a>";
     if (config.debug_mode) {
         index += "<a href='/debug.html' class='action-button action-button-warning'>🐛 Debug Log</a>";
     }
@@ -2239,6 +2347,7 @@ void handle_config() {
     resp += "</p>";
     resp += "<p class='info-text' id='wifi-ssid'>SSID: " + WiFi.SSID() + "</p>";
     resp += "<p class='info-text' id='wifi-ip'>IP: " + WiFi.localIP().toString() + "</p>";
+    resp += "<p class='info-text' id='wifi-rssi'>RSSI: " + String(WiFi.RSSI()) + " dBm </p>";
     resp += "<p class='info-text' id='system-uptime'>Uptime: " + time_string() + "</p>";
     resp += "<p class='info-text' id='current-datarate'>Current Data Rate: <span id='datarate-value'>" + String(get_current_datarate()) + "</span> bps</p>";
     resp += "<p class='info-text'>Loop Count: " + String(loop_count) + "</p>";
@@ -2260,7 +2369,7 @@ void handle_config() {
     resp += "<div class='card'>";
     resp += "<h2>Quick Actions</h2>";
     resp += "<div class='action-buttons'>";
-    resp += "<a href='/update' class='action-button'>📦 Update Firmware</a>";
+    resp += "<a href='/update' class='action-button'>📦 Local Firmware update</a>";
     if (config.debug_mode) {
         resp += "<a href='/debug.html' class='action-button action-button-warning'>🐛 Debug Log</a>";
     }
