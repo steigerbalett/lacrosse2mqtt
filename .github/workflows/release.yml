@@ -17,42 +17,65 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
           
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio
+          key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+          
       - name: Install PlatformIO
         run: |
-          pip install platformio
+          pip install --upgrade platformio
           pio --version
-          
-      - name: Install ESP32 platform
-        run: |
-          pio platform install espressif32
           
       - name: Build firmware
         run: |
-          pio run
+          pio run --environment ttgo-lora32-v21
           
       - name: Find and rename binary
         run: |
-          cp .pio/build/esp32dev/firmware.bin lacrosse2mqtt-${{ github.ref_name }}.bin
+          # Verwende ttgo-lora32-v21 statt esp32dev
+          FIRMWARE_PATH=".pio/build/ttgo-lora32-v21/firmware.bin"
+          OUTPUT_NAME="lacrosse2mqtt.${{ github.ref_name }}.bin"
+          
+          if [ ! -f "$FIRMWARE_PATH" ]; then
+            echo "Error: Firmware not found at $FIRMWARE_PATH"
+            ls -la .pio/build/
+            exit 1
+          fi
+          
+          cp "$FIRMWARE_PATH" "$OUTPUT_NAME"
+          echo "Created: $OUTPUT_NAME"
+          ls -lh "$OUTPUT_NAME"
           
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: lacrosse2mqtt-${{ github.ref_name }}.bin
+          files: lacrosse2mqtt.${{ github.ref_name }}.bin
           body: |
             ## LaCrosse2MQTT ${{ github.ref_name }}
             
             ### Installation
             1. Download the `.bin` file below
-            2. Go to your device configuration page
-            3. Click "Check for Updates"
-            4. Or upload manually via `/update` endpoint
+            2. Go to your device web interface
+            3. Navigate to Configuration → Updates
+            4. Click "Check for Updates" to install automatically
+            5. Or upload manually via the `/update` endpoint
+            
+            ### Hardware Support
+            - TTGO LoRa32 V2.1
+            - Heltec WiFi LoRa 32 (V2)
             
             ### Changes
-            ${{ github.event.head_commit.message }}
+            See commit history for details
           draft: false
           prerelease: false
         env:
