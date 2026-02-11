@@ -64,9 +64,11 @@ The following libraries are needed for building (could all be installed via ardu
 
 ## Nice2have
  * Add FHEM connector
+ * Avoid 0.000kbs decode
+ * Avoid send ID data over MQTT if name is chosen
 
 ## Know problems
-* Certificate error update checker
+
 
 ## Source/Idea
 This project uses code and protocol descriptions derived from
