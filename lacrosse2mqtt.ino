@@ -201,7 +201,7 @@ void setup_ntp() {
         
         // Zeige auch Unix-Timestamp
         time_t now = time(nullptr);
-        Serial.printf("Unix timestamp: %ld\n", now);
+        Serial.printf("Unix timestamp: %lld\n", now);
     } else {
         Serial.println("\nWARNING: NTP synchronization failed!");
         Serial.println("Certificate validation may not work correctly.");

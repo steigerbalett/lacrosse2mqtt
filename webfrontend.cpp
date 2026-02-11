@@ -2146,7 +2146,6 @@ void handle_config() {
     resp += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
     resp += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
     resp += "<p class='info-text'>Reset reason: " + ESP32GetResetReason(0) + "</p>";
-    resp += "</div>";
 
     extern bool ntp_synced;
     extern String get_current_time_string();
@@ -2157,6 +2156,7 @@ void handle_config() {
     } else {
         resp += "<span class='status-badge status-error'>✗ Not Synced</span></p>";
     }
+    resp += "</div>";
     
     resp += "<div class='card'>";
     resp += "<h2>Quick Actions</h2>";
