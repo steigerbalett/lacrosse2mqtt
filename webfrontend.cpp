@@ -2407,7 +2407,10 @@ void handle_config() {
     // Kompakte Badge-Anzeige
     resp += "<div style='display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0;'>";
     
-    if (config.proto_lacrosse || config.proto_wh24 || config.proto_wh25 || config.proto_tfa1) {
+    if (config.proto_tfa1) {
+        resp += "<span class='status-badge status-ok'>38.4k</span>";
+    }
+    if (config.proto_lacrosse || config.proto_wh24 || config.proto_wh25) {
         resp += "<span class='status-badge status-ok'>17.2k</span>";
     }
     if (config.proto_tx35it) {
@@ -2687,6 +2690,26 @@ void handle_config() {
     resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Protocols are grouped by data rate. Changes require saving configuration.</p>";
     resp += "<form action='/config.html'>";
   
+    // ========== 38.400 kbps ==========
+    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(156, 39, 176, 0.05); border-radius: 8px; border-left: 4px solid var(--primary-color);'>";
+    resp += "<h3 style='margin: 0 0 12px 0; color: var(--primary-color); font-size: 16px;'>⚡ 38.400 kbps</h3>";
+    // TFA_1 KlimaLogg Pro
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TFA_1 KlimaLogg Pro (38.400 bps)</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tfa1' value='1'";
+    if (config.proto_tfa1) resp += checked;
+    resp += " onchange='this.form.submit()' data-freq='1'>";
+    resp += "Enable TFA_1 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TFA 30.3180.IT, 30.3181.IT, 30.3199.IT (Pool sensor) at 868 MHz</div>";
+    resp += "</div>";
+
+    resp += "</div>";
+    // Ende 38400
+
     // ========== 17.241 kbps ==========
     resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(3, 169, 244, 0.05); border-radius: 8px; border-left: 4px solid var(--primary-color);'>";
     resp += "<h3 style='margin: 0 0 12px 0; color: var(--primary-color); font-size: 16px;'>⚡ 17.241 kbps</h3>";
@@ -2760,21 +2783,7 @@ void handle_config() {
     resp += "</div>";
     resp += "<div class='option-description'>HP1000 weather station with barometric pressure at 915 MHz</div>";
     resp += "</div>";
-
-    // TFA_1 KlimaLogg Pro
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TFA_1 KlimaLogg Pro (38.400 bps)</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_tfa1' value='1'";
-    if (config.proto_tfa1) resp += checked;
-    resp += " onchange='this.form.submit()' data-freq='1'>";
-    resp += "Enable TFA_1 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>TFA 30.3180.IT, 30.3181.IT, 30.3199.IT (Pool sensor) at 868 MHz</div>";
-    resp += "</div>";
-    
+  
     resp += "</div>"; // Ende 17.241 kbps Gruppe
     
     // ========== 9.579 kbps ==========
@@ -2932,9 +2941,9 @@ void handle_config() {
 
     resp += "<script>";
     resp += "function updateSensorsByFreq(freq) {";
-    resp += "  const freq433 = [];";
-    resp += "  const freq868 = ['proto_lacrosse', 'proto_tx35it', 'proto_tx38it', 'proto_wh1080', 'proto_ws1600', 'proto_wt440xh', 'proto_w136', 'proto_tx22it', 'proto_emt7110', 'proto_tfa1'];";
-    resp += "  const freq915 = ['proto_wh24', 'proto_wh25', 'proto_wh65b', 'proto_hp1000'];";
+    resp += "    const freq433 = ['proto_lacrosse'];\n";
+    resp += "    const freq868 = ['proto_lacrosse', 'proto_tx35it', 'proto_tx38it', 'proto_wh1080', 'proto_ws1600', 'proto_wt440xh', 'proto_w136', 'proto_tx22it', 'proto_emt7110', 'proto_wh24', 'proto_wh25', 'proto_tfa1'];\n";
+    resp += "    const freq915 = ['proto_wh24', 'proto_wh25', 'proto_wh65b', 'proto_hp1000', 'proto_tx22it', 'proto_emt7110'];\n";
     resp += "  ";
     resp += "  document.querySelectorAll('input[type=\"checkbox\"][name^=\"proto_\"]').forEach(function(checkbox) {";
     resp += "    const name = checkbox.name;";
