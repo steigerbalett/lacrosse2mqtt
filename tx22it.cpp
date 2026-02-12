@@ -53,8 +53,7 @@ bool TX22IT::TryHandleData(byte *data, byte payLoadSize, Frame *f) {
     fcache[idx].wind_speed = f->wind_speed;
     fcache[idx].wind_gust = f->wind_gust;
     fcache[idx].wind_direction = f->wind_direction;
-    fcache[idx].wind_timestamp = millis();
-    fcache[idx].timestamp = millis();
+    //fcache[idx].timestamp = millis();
     fcache[idx].valid = true;
     fcache[idx].rssi = f->rssi;
     fcache[idx].rate = f->rate;

@@ -8,38 +8,37 @@
 
 class SX127x {
 private:
-    byte m_ss;
-    byte m_reset;
-    byte m_datarate;
+    int m_datarate;
     unsigned long m_frequency;
-    uint8_t m_payload[PAYLOAD_SIZE];
+    int8_t m_rssi;
+    byte m_reset, m_ss;
+    byte m_payload[FRAME_LENGTH];
     bool m_payloadready;
-    byte m_rssi;
     
-    // Active data rates configuration
-    int active_rates[3];
-    int active_rate_count;
+    // Datenraten-Verwaltung
+    bool active_rates[6];
+    int num_active_rates;
     int current_rate_index;
-
-    bool ready();
-    byte GetByteFromFifo();
-    void ClearFifo();
+    
     byte ReadReg(byte addr);
     void WriteReg(byte addr, byte value);
-    void SetRate(int rate);
+    void ClearFifo();
+    byte GetByteFromFifo();
+    void SetDataRate(int bitrate);
 
 public:
-    SX127x(byte ss, byte reset = (byte)-1);
+    SX127x(byte ss, byte reset = -1);
     bool init();
     void SetFrequency(unsigned long kHz);
-    void EnableReceiver(bool enable, int len = 5);
+    void SetupForLaCrosse();
+    void EnableReceiver(bool enable, int len = FRAME_LENGTH);
+    void SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842, bool rate_6618, bool rate_4800, bool use_38400 = false);
+    void NextDataRate(int useRate = -1);
     bool Receive(byte &length);
     byte *GetPayloadPointer();
-    void SetupForLaCrosse();
     int GetDataRate();
     int8_t GetRSSI();
-    void SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842, bool rate_6618, bool rate_4800);
-    void NextDataRate(byte idx = 0xff);
+    bool ready();
 };
 
 #endif

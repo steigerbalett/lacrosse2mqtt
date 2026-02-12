@@ -1,11 +1,6 @@
-#include "SX127x.h"
 #include "globals.h"
+#include "SX127x.h"
 #include <SPI.h>
-
-/* datarates in bps which will be cycled in NextDataRate() */
-/* static int _rates[] = { 4800, 6618, 8842, 9579, 17241 }; */
-static int _rates[] = { 9579, 17241 };
-
 
 bool SX127x::ready()
 {
@@ -154,24 +149,24 @@ bool SX127x::init()
         return false;
     return true;
 }
-
 SX127x::SX127x(byte ss, byte reset)
+
 {
     m_reset = reset;
     m_ss = ss;
     m_datarate = 0;
     m_frequency = 868250;
     m_payloadready = false;
-    active_rate_count = 0;
+    num_active_rates = 0;
     current_rate_index = 0;
-    for (int i = 0; i < 3; i++) {
-        active_rates[i] = 0;
+    for (int i = 0; i < 6; i++) {
+        active_rates[i] = false;
     }
 }
 
 int SX127x::GetDataRate()
 {
-    return _rates[m_datarate];
+    return m_datarate;  // m_datarate enthält jetzt direkt den Wert (z.B. 17241)
 }
 
 int8_t SX127x::GetRSSI()
@@ -179,84 +174,120 @@ int8_t SX127x::GetRSSI()
     return -(m_rssi / 2);
 }
 
-void SX127x::SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842, bool rate_6618, bool rate_4800)
+void SX127x::SetActiveDataRates(bool rate_17241, bool rate_9579, bool rate_8842, bool rate_6618, bool rate_4800, bool use_38400)
 {
-    active_rate_count = 0;
+    active_rates[0] = rate_17241;  // 17.241 kbps
+    active_rates[1] = rate_9579;   // 9.579 kbps
+    active_rates[2] = rate_8842;   // 8.842 kbps
+    active_rates[3] = rate_6618;   // 6.618 kbps
+    active_rates[4] = rate_4800;   // 4.800 kbps
+    active_rates[5] = use_38400;   // 38.400 kbps
     
-    if (rate_17241) {
-        active_rates[active_rate_count++] = 17241;
-    }
-    if (rate_9579) {
-        active_rates[active_rate_count++] = 9579;
-    }
-    if (rate_8842) {
-        active_rates[active_rate_count++] = 8842;
-    }
-    if (rate_6618) {
-        active_rates[active_rate_count++] = 6618;
-    }
-    if (rate_4800) {
-        active_rates[active_rate_count++] = 4800;
-    }
-    
-    // Fallback: Wenn keine Rate aktiv, verwende Standard
-    if (active_rate_count == 0) {
-        active_rates[0] = 17241;
-        active_rate_count = 1;
-    }
-    
-    current_rate_index = 0;
-    
-    Serial.println("Active data rates configured:");
-    for (int i = 0; i < active_rate_count; i++) {
-        Serial.printf("  - %d bps\n", active_rates[i]);
+    // Zähle aktive Raten
+    num_active_rates = 0;
+    for (int i = 0; i < 6; i++) {
+        if (active_rates[i]) num_active_rates++;
     }
 }
 
-void SX127x::SetRate(int rate)
+void SX127x::SetDataRate(int bitrate)
 {
-    // Finde den Index der Rate im _rates Array
-    for (int i = 0; i < sizeof(_rates) / sizeof(_rates[0]); i++) {
-        if (_rates[i] == rate) {
-            m_datarate = i;
-            break;
-        }
-    }
-    
-    // Berechne und setze BitRate Register
-    unsigned long br = 32000000L / rate;
+    // Berechne BitRate Register
+    unsigned long br = 32000000L / bitrate;
     WriteReg(REG_BITRATEMSB, br >> 8);
     WriteReg(REG_BITRATELSB, br);
     
-    Serial.printf("SetRate: %d bps (BR=0x%04X)\n", rate, (unsigned int)br);
-}
-
-void SX127x::NextDataRate(byte idx)
-{
-    if (idx != 0xff && idx < active_rate_count) {
-        current_rate_index = idx;
-    } else {
-        if (active_rate_count == 0) {
-            // Fallback auf alte Funktionsweise
-            static const int rates[] = {17241, 9579, 8842, 6618, 4800};
-            static byte idx_old = 0;
-            if (idx == 0xff) {
-                idx_old++;
-                if (idx_old > 2) idx_old = 0;
-            } else {
-                idx_old = idx;
-                if (idx_old > 2) idx_old = 0;
-            }
-            SetRate(rates[idx_old]);
-            Serial.printf("Data rate: %d bps\n", rates[idx_old]);
-            return;
-        }
-        
-        // Zyklisch zum nächsten
-        current_rate_index = (current_rate_index + 1) % active_rate_count;
+    // Setze Frequenzabweichung und RX-Bandbreite je nach Bitrate
+    switch (bitrate) {
+        case 17241:  // LaCrosse IT+, WH24, WH25, WH65B, HP1000
+            // FDEV = 9579 Hz -> Register = (9579 * 2^19) / 32000000 = 156
+            WriteReg(REG_FDEVMSB, 0x00);
+            WriteReg(REG_FDEVLSB, 0x9C);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_20 | RF_RXBW_EXP_3); // ~25 kHz
+            break;
+            
+        case 9579:   // TX35-IT
+            // FDEV = 9579 Hz
+            WriteReg(REG_FDEVMSB, 0x00);
+            WriteReg(REG_FDEVLSB, 0x9C);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_20 | RF_RXBW_EXP_3); // ~25 kHz
+            break;
+            
+        case 8842:   // TX38-IT
+            // FDEV = 30000 Hz
+            WriteReg(REG_FDEVMSB, RF_FDEVMSB_30000_HZ);
+            WriteReg(REG_FDEVLSB, RF_FDEVLSB_30000_HZ);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_16 | RF_RXBW_EXP_2); // ~50 kHz
+            break;
+            
+        case 6618:   // WH1080, WS1600, WT440XH, TX22-IT, EMT7110
+            // FDEV = 11000 Hz -> Register = (11000 * 2^19) / 32000000 = 179
+            WriteReg(REG_FDEVMSB, 0x00);
+            WriteReg(REG_FDEVLSB, 0xB3);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_20 | RF_RXBW_EXP_3); // ~25 kHz
+            break;
+            
+        case 4800:   // W136
+            // FDEV = 2500 Hz -> Register = (2500 * 2^19) / 32000000 = 41
+            WriteReg(REG_FDEVMSB, 0x00);
+            WriteReg(REG_FDEVLSB, 0x29);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_24 | RF_RXBW_EXP_4); // ~10.4 kHz
+            break;
+            
+        case 38400:  // TFA_1 KlimaLogg Pro
+            // FDEV = 19200 Hz -> Register = (19200 * 2^19) / 32000000 = 315
+            WriteReg(REG_FDEVMSB, 0x01);
+            WriteReg(REG_FDEVLSB, 0x3B);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_16 | RF_RXBW_EXP_1); // ~83.3 kHz
+            break;
+            
+        default:     // Fallback zu 17.241 kbps
+            WriteReg(REG_FDEVMSB, 0x00);
+            WriteReg(REG_FDEVLSB, 0x9C);
+            WriteReg(REG_RXBW, RF_RXBW_MANT_20 | RF_RXBW_EXP_3);
+            break;
     }
     
-    int rate = active_rates[current_rate_index];
-    SetRate(rate);
-    Serial.printf("Data rate: %d bps (index %d/%d)\n", rate, current_rate_index, active_rate_count);
+    m_datarate = bitrate;
+    
+    if (config.debug_mode) {
+        Serial.printf("SetDataRate: %d bps (BR=0x%04X)\n", bitrate, (unsigned int)br);
+    }
+}
+
+void SX127x::NextDataRate(int useRate)
+{
+    if (useRate < 0) {
+        // Auto-Modus: Wechsle zur nächsten aktiven Rate
+        int start_index = current_rate_index;
+        do {
+            current_rate_index = (current_rate_index + 1) % 6;
+            
+            // Verhindere Endlosschleife wenn keine Rate aktiv ist
+            if (current_rate_index == start_index && num_active_rates == 0) {
+                current_rate_index = 0;  // Fallback
+                break;
+            }
+        } while (!active_rates[current_rate_index] && current_rate_index != start_index);
+    } else {
+        // Explizite Rate setzen
+        if (useRate >= 0 && useRate < 6) {
+            current_rate_index = useRate;
+        }
+    }
+    
+    // Konfiguriere die Hardware für die gewählte Rate
+    switch (current_rate_index) {
+        case 0: SetDataRate(17241); break;
+        case 1: SetDataRate(9579); break;
+        case 2: SetDataRate(8842); break;
+        case 3: SetDataRate(6618); break;
+        case 4: SetDataRate(4800); break;
+        case 5: SetDataRate(38400); break;
+        default: SetDataRate(17241); break;
+    }
+    
+    if (config.debug_mode) {
+        Serial.printf("Switched to data rate index %d (%d bps)\n", current_rate_index, m_datarate);
+    }
 }

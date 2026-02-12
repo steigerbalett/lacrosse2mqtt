@@ -31,8 +31,7 @@ bool W136::TryHandleData(byte *data, byte payLoadSize, Frame *f) {
     fcache[idx].ID = f->ID;
     fcache[idx].batlo = f->batlo;
     fcache[idx].rain = f->rain;
-    fcache[idx].rain_timestamp = millis();
-    fcache[idx].timestamp = millis();
+    //fcache[idx].timestamp = millis();
     fcache[idx].valid = true;
     fcache[idx].rssi = f->rssi;
     fcache[idx].rate = f->rate;

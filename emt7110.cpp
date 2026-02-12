@@ -40,8 +40,9 @@ bool EMT7110::TryHandleData(byte *data, byte payLoadSize, Frame *f) {
     fcache[idx].init = f->init;
     fcache[idx].power = f->power;
     fcache[idx].energy = f->energy;
-    fcache[idx].power_timestamp = millis();
-    fcache[idx].timestamp = millis();
+    //fcache[idx].timestamp = millis();
+    //fcache[idx].power = frame->power;
+    //fcache[idx].energy = frame->energy;
     fcache[idx].valid = true;
     fcache[idx].rssi = f->rssi;
     fcache[idx].rate = f->rate;

@@ -131,6 +131,11 @@ bool load_config()
     config.proto_emt7110 = false;  
     config.proto_wh24 = false;
     config.proto_wh25 = false;
+    config.proto_wh65b = false;
+    config.proto_hp1000 = false;
+    config.proto_tfa1 = true;
+    config.lora_frequency = 1;        // Default 868MHz
+    config.freq_toggle_interval = 20; // Default 20s
     
     if (!littlefs_ok)
         return false;
@@ -184,14 +189,24 @@ bool load_config()
             config.proto_wt440xh = doc["proto_wt440xh"];
         if (!doc["proto_w136"].isNull())
             config.proto_w136 = doc["proto_w136"];
-        if (!doc["proto_tx22it"].isNull())          // NEU
+        if (!doc["proto_tx22it"].isNull())
             config.proto_tx22it = doc["proto_tx22it"];
-        if (!doc["proto_emt7110"].isNull())         // NEU
+        if (!doc["proto_emt7110"].isNull())
             config.proto_emt7110 = doc["proto_emt7110"];
-        if (!doc["proto_wh24"].isNull())            // NEU
+        if (!doc["proto_wh24"].isNull())
             config.proto_wh24 = doc["proto_wh24"];
-        if (!doc["proto_wh25"].isNull())            // NEU
+        if (!doc["proto_wh25"].isNull())
             config.proto_wh25 = doc["proto_wh25"];
+        if (!doc["proto_wh65b"].isNull())
+            config.proto_wh65b = doc["proto_wh65b"];
+        if (!doc["proto_hp1000"].isNull())
+            config.proto_hp1000 = doc["proto_hp1000"];
+        if (!doc["proto_tfa1"].isNull())
+            config.proto_tfa1 = doc["proto_tfa1"];
+        if (!doc["lora_frequency"].isNull())
+            config.lora_frequency = doc["lora_frequency"];
+        if (!doc["freq_toggle_interval"].isNull())
+            config.freq_toggle_interval = doc["freq_toggle_interval"];
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -213,6 +228,11 @@ bool load_config()
         Serial.println("proto_emt7110: " + String(config.proto_emt7110));
         Serial.println("proto_wh24: " + String(config.proto_wh24));
         Serial.println("proto_wh25: " + String(config.proto_wh25));
+        Serial.println("proto_wh65b: " + String(config.proto_wh65b));
+        Serial.println("proto_hp1000: " + String(config.proto_hp1000));
+        Serial.println("proto_tfa1: " + String(config.proto_tfa1));
+        Serial.println("lora_frequency: " + String(config.lora_frequency));
+        Serial.println("freq_toggle_interval: " + String(config.freq_toggle_interval));
     }
     
     cfg.close();
@@ -248,10 +268,15 @@ bool save_config()
     doc["proto_ws1600"] = config.proto_ws1600;
     doc["proto_wt440xh"] = config.proto_wt440xh;
     doc["proto_w136"] = config.proto_w136;
-    doc["proto_tx22it"] = config.proto_tx22it;      // NEU
-    doc["proto_emt7110"] = config.proto_emt7110;    // NEU
-    doc["proto_wh24"] = config.proto_wh24;          // NEU
-    doc["proto_wh25"] = config.proto_wh25;          // NEU
+    doc["proto_tx22it"] = config.proto_tx22it;
+    doc["proto_emt7110"] = config.proto_emt7110;
+    doc["proto_wh24"] = config.proto_wh24;
+    doc["proto_wh25"] = config.proto_wh25;
+    doc["proto_wh65b"] = config.proto_wh65b;
+    doc["proto_hp1000"] = config.proto_hp1000;
+    doc["proto_tfa1"] = config.proto_tfa1;
+    doc["lora_frequency"] = config.lora_frequency;
+    doc["freq_toggle_interval"] = config.freq_toggle_interval;
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -463,11 +488,10 @@ void add_current_table(String &s, bool rawdata)
         // Filter: Überspringe ungültige, gelöschte oder rate=0 Sensoren
         if (fcache[i].timestamp == 0 || fcache[i].ID == 0xFF || fcache[i].rate == 0)
             continue;
-            
+        if (fcache[i].humi > 0 && fcache[i].humi <= 100)
+            hasHumidity = true;    
         if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100)
             hasTempCh2 = true;
-        if (fcache[i].humi > 0 && fcache[i].humi <= 100)
-            hasHumidity = true;
         if (fcache[i].wind_speed > 0)
             hasWindSpeed = true;
         if (fcache[i].wind_direction >= 0 && fcache[i].wind_direction <= 360)
@@ -490,11 +514,10 @@ void add_current_table(String &s, bool rawdata)
 //    s += "<th>Ch</th>";
     s += "<th>Type</th>";
     s += "<th>Temperature</th>";
-    
-    if (hasTempCh2)
-        s += "<th>Temp 2</th>";
     if (hasHumidity)
         s += "<th>Humidity</th>";
+    if (hasTempCh2)
+        s += "<th>Temp 2</th>";
     if (hasWindSpeed)
         s += "<th>Wind Speed</th>";
     if (hasWindDir)
@@ -554,19 +577,19 @@ void add_current_table(String &s, bool rawdata)
         // Temperatur 1 (immer anzeigen)
         s += "<td>" + String(fcache[i].temp, 1) + " °C</td>";
 
-        // Temperatur 2 (nur wenn Spalte sichtbar)
-        if (hasTempCh2) {
-            if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
-                s += "<td>" + String(fcache[i].temp_ch2, 1) + " °C</td>";
+        // Luftfeuchtigkeit (nur wenn Spalte sichtbar)
+        if (hasHumidity) {
+            if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
+                s += "<td>" + String(fcache[i].humi) + " %</td>";
             } else {
                 s += "<td>-</td>";
             }
         }
 
-        // Luftfeuchtigkeit (nur wenn Spalte sichtbar)
-        if (hasHumidity) {
-            if (fcache[i].humi > 0 && fcache[i].humi <= 100) {
-                s += "<td>" + String(fcache[i].humi) + " %</td>";
+        // Temperatur 2 (nur wenn Spalte sichtbar)
+        if (hasTempCh2) {
+            if (fcache[i].temp_ch2 != 0 && fcache[i].temp_ch2 > -100 && fcache[i].temp_ch2 < 100) {
+                s += "<td>" + String(fcache[i].temp_ch2, 1) + " °C</td>";
             } else {
                 s += "<td>-</td>";
             }
@@ -1092,44 +1115,6 @@ static void add_header(String &s, const String &title)
 "document.getElementById('update-progress-container').style.display='none';"
 "});"
 "}"
-
-    // Highlight datarate
-        "function updateActiveDatarate(){"
-    "fetch('/api/system')"
-    ".then(r=>{"
-    "if(!r.ok)throw new Error('HTTP '+r.status);"
-    "return r.json();"
-    "})"
-    ".then(d=>{"
-    "if(!d.current_datarate){"
-    "console.warn('No datarate in response');"
-    "return;"
-    "}"
-    "const cr=d.current_datarate;"
-    "const k=(cr/1000.0).toFixed(3);"
-    "const b=document.getElementById('active-datarate');"
-    "if(b){"
-    "b.textContent=k+' kbps';"
-    "b.style.animation='none';"
-    "setTimeout(()=>b.style.animation='',10);"
-    "}"
-    "document.querySelectorAll('.datarate-item').forEach(it=>{"
-    "const ir=parseFloat(it.getAttribute('data-rate'));"
-    "if(Math.abs(ir-cr)<10){"
-    "it.classList.add('active');"
-    "}else{"
-    "it.classList.remove('active');"
-    "}"
-    "});"
-    "}).catch(e=>{"
-    "console.error('Datarate fetch failed:',e);"
-    "const b=document.getElementById('active-datarate');"
-    "if(b)b.textContent='Error';"
-    "});"
-    "}\n"
-    
-    "let datarateInterval=setInterval(updateActiveDatarate,2000);\n"
-    "updateActiveDatarate();\n"
  
     "</script>";
     }
@@ -2238,6 +2223,11 @@ void handle_config() {
         bool new_emt7110 = (server.hasArg("proto_emt7110") && server.arg("proto_emt7110") == "1");
         bool new_wh24 = (server.hasArg("proto_wh24") && server.arg("proto_wh24") == "1");
         bool new_wh25 = (server.hasArg("proto_wh25") && server.arg("proto_wh25") == "1");
+        bool new_wh65b = (server.hasArg("proto_wh65b") && server.arg("proto_wh65b") == "1");
+        bool new_hp1000 = (server.hasArg("proto_hp1000") && server.arg("proto_hp1000") == "1");
+        bool new_tfa1 = (server.hasArg("proto_tfa1") && server.arg("proto_tfa1") == "1");
+        //bool new_lora_freq = (server.hasArg("lora_freq") && server.arg("lora_freq") == "1");
+        //bool new_freq_toggle = (server.hasArg("freq_toggle") && server.arg("freq_toggle") == "1");
         
         // Prüfe auf Änderungen und update
         if (new_lacrosse != config.proto_lacrosse) {
@@ -2306,6 +2296,41 @@ void handle_config() {
             config.changed = true;
             Serial.println("WH25 protocol changed to: " + String(config.proto_wh25));
         }
+        if (new_wh65b != config.proto_wh65b) {
+            config.proto_wh65b = new_wh65b;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WH65b protocol changed to: " + String(config.proto_wh65b));
+        }
+        if (new_hp1000 != config.proto_hp1000) {
+            config.proto_hp1000 = new_hp1000;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("HP1000 protocol changed to: " + String(config.proto_hp1000));
+        }
+        if (server.hasArg("lora_freq")) {
+        uint8_t new_freq = server.arg("lora_freq").toInt();
+            if (new_freq != config.lora_frequency && new_freq <= 2) {
+                config.lora_frequency = new_freq;
+                config_changed = true;
+                config.changed = true;
+                Serial.println("LoRa frequency changed to: " + String(config.lora_frequency));
+            }
+        }
+        if (server.hasArg("freq_toggle")) {
+            uint16_t new_interval = server.arg("freq_toggle").toInt();
+            if (new_interval != config.freq_toggle_interval && new_interval >= 5 && new_interval <= 120) {
+                config.freq_toggle_interval = new_interval;
+                config_changed = true;
+                Serial.println("Frequency toggle interval changed to: " + String(config.freq_toggle_interval));
+            }
+        }
+        if (new_tfa1 != config.proto_tfa1) {
+            config.proto_tfa1 = new_tfa1;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("TFA_1 protocol changed to: " + String(config.proto_tfa1));
+        }
     }
     
     String resp;
@@ -2350,6 +2375,7 @@ void handle_config() {
     resp += "<p class='info-text' id='wifi-rssi'>RSSI: " + String(WiFi.RSSI()) + " dBm </p>";
     resp += "<p class='info-text' id='system-uptime'>Uptime: " + time_string() + "</p>";
     resp += "<p class='info-text' id='current-datarate'>Current Data Rate: <span id='datarate-value'>" + String(get_current_datarate()) + "</span> bps</p>";
+    resp += "<p class='info-text'>Toggle Interval: <span id='config-toggle-interval'>" + String(config.freq_toggle_interval) + "</span> seconds</p>";
     resp += "<p class='info-text'>Loop Count: " + String(loop_count) + "</p>";
     resp += "<p class='info-text'>Software: " + String(LACROSSE2MQTT_VERSION) + "</p>";
     resp += "<p class='info-text'>Built: " + String(__DATE__) + " " + String(__TIME__) + "</p>";
@@ -2381,7 +2407,7 @@ void handle_config() {
     // Kompakte Badge-Anzeige
     resp += "<div style='display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0;'>";
     
-    if (config.proto_lacrosse || config.proto_wh24 || config.proto_wh25) {
+    if (config.proto_lacrosse || config.proto_wh24 || config.proto_wh25 || config.proto_tfa1) {
         resp += "<span class='status-badge status-ok'>17.2k</span>";
     }
     if (config.proto_tx35it) {
@@ -2400,15 +2426,18 @@ void handle_config() {
     bool any_active = config.proto_lacrosse || config.proto_tx35it || config.proto_tx38it || 
                       config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || 
                       config.proto_w136 || config.proto_tx22it || config.proto_emt7110 ||
-                      config.proto_wh24 || config.proto_wh25;
+                      config.proto_wh24 || config.proto_wh25 || config.proto_tfa1;
     
-    if (!any_active) {
+        if (!any_active) {
         resp += "<span class='status-badge status-error'>⚠ None</span>";
     }
     
     resp += "</div>";
-    int interval_sec = get_interval();
-    resp += "<span class='info-text' style='color: var(--secondary-text-color);'>(⟳ " + String(interval_sec) + "s)</span>";
+    
+    // Toggle-Intervall-Anzeige
+    resp += "<p class='info-text' style='margin-top: 8px;'>";
+    resp += "Switch between data rates every " + String(config.freq_toggle_interval) + "s)</span>";
+    resp += "</p>";
     resp += "</p>";
     
     resp += "</div>";
@@ -2606,13 +2635,58 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
 
-    // ZEILE ~2120 - Kompletter Ersatz der Protokoll-Sektion:
+    resp += "<div class='card'>";
+    resp += "<h2>📡 LoRa Module Configuration</h2>";
+    resp += "<form action='/config.html'>";
+    
+    resp += "<h3>Frequency Band</h3>";
+    resp += "<div class='radio-group'>";
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='lora_freq' value='0'";
+    if (config.lora_frequency == 0) resp += checked;
+    resp += " onchange='updateSensorsByFreq(0)'>";
+    resp += "      433 MHz";
+    resp += "    </label>";
+    resp += "    <div class='option-description'>For LaCrosse IT+, TX35-IT, TX38-IT sensors</div>";
+    resp += "  </div>";
+    
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='lora_freq' value='1'";
+    if (config.lora_frequency == 1) resp += checked;
+    resp += " onchange='updateSensorsByFreq(1)'>";
+    resp += "      868 MHz (Default)";
+    resp += "    </label>";
+    resp += "    <div class='option-description'>For WH1080, WS1600, WT440XH, W136 sensors</div>";
+    resp += "  </div>";
+    
+    resp += "  <div class='radio-item'>";
+    resp += "    <label>";
+    resp += "      <input type='radio' name='lora_freq' value='2'";
+    if (config.lora_frequency == 2) resp += checked;
+    resp += " onchange='updateSensorsByFreq(2)'>";
+    resp += "      915 MHz";
+    resp += "    </label>";
+    resp += "    <div class='option-description'>For WH24, WH25, WH65B, HP1000, TX22-IT, EMT7110 sensors</div>";
+    resp += "  </div>";
+    resp += "</div>";
+    
+    resp += "<h3 style='margin-top: 20px;'>Frequency Toggle Interval</h3>";
+    resp += "<label>Time between frequency switches (seconds):</label>";
+    resp += "<input type='number' name='freq_toggle' min='5' max='120' value='" + String(config.freq_toggle_interval) + "' ";
+    resp += "style='max-width: 200px;'>";
+    resp += "<div class='option-description'>How long to listen on each data rate before switching. Default: 20 seconds</div>";
+    
+    resp += "<button type='submit' style='margin-top: 16px;'>Update LoRa Configuration</button>";
+    resp += "</form>";
+    resp += "</div>";
 
     resp += "<div class='card'>";
     resp += "<h2>📡 Protocol Settings</h2>";
     resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Protocols are grouped by data rate. Changes require saving configuration.</p>";
     resp += "<form action='/config.html'>";
-    
+  
     // ========== 17.241 kbps ==========
     resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(3, 169, 244, 0.05); border-radius: 8px; border-left: 4px solid var(--primary-color);'>";
     resp += "<h3 style='margin: 0 0 12px 0; color: var(--primary-color); font-size: 16px;'>⚡ 17.241 kbps</h3>";
@@ -2657,6 +2731,48 @@ void handle_config() {
     resp += "</label>";
     resp += "</div>";
     resp += "<div class='option-description'>WH25 barometric pressure sensor at 868.300 MHz (17.241 kbps)</div>";
+    resp += "</div>";
+
+    // WH65B
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH65B Weather Sensor</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wh65b' value='1'";
+    if (config.proto_wh65b) resp += checked;
+    resp += " onchange='this.form.submit()' data-freq='2'>";
+    resp += "Enable WH65B Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>WH65B outdoor sensor (improved wind accuracy) at 915 MHz</div>";
+    resp += "</div>";
+    
+    // HP1000
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>HP1000 Weather Station</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_hp1000' value='1'";
+    if (config.proto_hp1000) resp += checked;
+    resp += " onchange='this.form.submit()' data-freq='2'>";
+    resp += "Enable HP1000 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>HP1000 weather station with barometric pressure at 915 MHz</div>";
+    resp += "</div>";
+
+    // TFA_1 KlimaLogg Pro
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TFA_1 KlimaLogg Pro (38.400 bps)</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_tfa1' value='1'";
+    if (config.proto_tfa1) resp += checked;
+    resp += " onchange='this.form.submit()' data-freq='1'>";
+    resp += "Enable TFA_1 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>TFA 30.3180.IT, 30.3181.IT, 30.3199.IT (Pool sensor) at 868 MHz</div>";
     resp += "</div>";
     
     resp += "</div>"; // Ende 17.241 kbps Gruppe
@@ -2813,6 +2929,36 @@ void handle_config() {
     resp += "<button id='auto-refresh-btn' onclick='toggleAutoRefresh()' style='background-color:var(--warning-color);min-width:120px;'>⏸️ Pause Auto-Refresh</button>";
     resp += "</div>";
     resp += "</div>";
+
+    resp += "<script>";
+    resp += "function updateSensorsByFreq(freq) {";
+    resp += "  const freq433 = [];";
+    resp += "  const freq868 = ['proto_lacrosse', 'proto_tx35it', 'proto_tx38it', 'proto_wh1080', 'proto_ws1600', 'proto_wt440xh', 'proto_w136', 'proto_tx22it', 'proto_emt7110', 'proto_tfa1'];";
+    resp += "  const freq915 = ['proto_wh24', 'proto_wh25', 'proto_wh65b', 'proto_hp1000'];";
+    resp += "  ";
+    resp += "  document.querySelectorAll('input[type=\"checkbox\"][name^=\"proto_\"]').forEach(function(checkbox) {";
+    resp += "    const name = checkbox.name;";
+    resp += "    let isValid = false;";
+    resp += "    if (freq == 0 && freq433.includes(name)) isValid = true;";
+    resp += "    if (freq == 1 && freq868.includes(name)) isValid = true;";
+    resp += "    if (freq == 2 && freq915.includes(name)) isValid = true;";
+    resp += "    ";
+    resp += "    checkbox.disabled = !isValid;";
+    resp += "    const label = checkbox.closest('.radio-item');";
+    resp += "    if (label) {";
+    resp += "      label.style.opacity = isValid ? '1' : '0.4';";
+    resp += "      if (!isValid) checkbox.checked = false;";
+    resp += "    }";
+    resp += "  });";
+    resp += "}";
+    resp += "";
+    resp += "window.addEventListener('DOMContentLoaded', function() {";
+    resp += "  const selectedFreq = document.querySelector('input[name=\"lora_freq\"]:checked');";
+    resp += "  if (selectedFreq) {";
+    resp += "    updateSensorsByFreq(parseInt(selectedFreq.value));";
+    resp += "  }";
+    resp += "});";
+    resp += "</script>";
     
     add_sysinfo_footer(resp);
     server.send(200, "text/html", resp);

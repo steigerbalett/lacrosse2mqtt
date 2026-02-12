@@ -1,7 +1,15 @@
 #ifndef _GLOBALS_H
 #define _GLOBALS_H
 
-#define LACROSSE2MQTT_VERSION "v2026.2.4"
+#define LACROSSE2MQTT_VERSION "v2026.2.5-alpha"
+
+#include <Arduino.h>
+#include <WString.h>
+
+// Heltec PIN
+#ifndef SS
+#define SS 18  // Heltec WiFi LoRa 32 V2 Standard
+#endif
 
 /* if not heltec_lora_32_v2 board... */
 #ifndef WIFI_LoRa_32_V2
@@ -17,7 +25,8 @@
 #define LORA_CS 18 // GPIO18 - SX1276 CS
 #define LORA_RST 14 // GPIO14 - SX1276 RST
 #define LORA_IRQ 26 // GPIO26 - SX1276 IRQ (interrupt request)
-#define SS 5  // Standardwert für ESP32
+// SS wird bereits in pins_arduino.h definiert (Pin 18 für Heltec)
+// #define SS 5  // Standardwert für ESP32 - Verursacht Konflikt
 static const uint8_t KEY_BUILTIN = 0;
 #endif
 #ifndef LED_BUILTIN
@@ -58,53 +67,44 @@ static const uint8_t LED_BUILTIN = 2;
 #define BASE_SENSOR_TIMEOUT 300000   // 5 Minuten Basis-Timeout
 #define TIMEOUT_PER_PROTOCOL 60000   // +1 Minute pro aktiviertem Protokoll
 
+/* Cache-Struktur für Sensordaten */
 struct Cache {
     unsigned long timestamp;
+    unsigned long timestamp_ch2;
+    unsigned long power_timestamp;
+    unsigned long wind_timestamp;
+    unsigned long rain_timestamp;
+    
     byte ID;
     byte rate;
-    int rssi;
+    int8_t rssi;
     uint8_t data[FRAME_LENGTH];
     float temp;
     byte humi;
-    bool batlo;
-    bool init;
-    bool valid;
-    byte channel;
-    char sensorType[16];
-    
-    // Kanal 2 Daten (nur Temperatur!)
     float temp_ch2;
-    unsigned long timestamp_ch2;
+    bool valid;
+    bool batlo;
+    byte channel;
+    bool init;
     
-    // Wetterstation Daten (bestehend)
+    // Wetterdaten
     float wind_speed;
     int wind_direction;
+    float wind_gust;
     float rain;
     float rain_total;
-    byte wind_gust;
-    unsigned long rain_timestamp;
-    unsigned long wind_timestamp;
+    float power;
+    float energy;
+    float pressure;
     
-    // Erweiterte Wetterdaten für TX22IT
-    float wind_speed_avg;
-    float wind_direction_avg;
-    float wind_gust_max;
-    
-    // Energie-Daten für EMT7110
-    float power;          // Leistung in Watt
-    float energy;         // Energie in kWh
-    unsigned long power_timestamp;
-    
-    // Luftdruck-Daten für WH24/WH25
-    float pressure;       // Luftdruck in hPa
-    unsigned long pressure_timestamp;
+    char sensorType[16];
 };
 
-// Hilfsfunktion für Cache-Index
 static inline int GetCacheIndex(byte ID, byte channel) {
     return ID;
 }
 
+/* Konfigurationsstruktur */
 struct Config {
     String mqtt_server;
     int mqtt_port;
@@ -115,30 +115,38 @@ struct Config {
     bool debug_mode;
     bool screensaver_mode;
     bool mqtt_use_names;
-    bool changed;
+    
+    // Protokoll-Aktivierung
     bool proto_lacrosse;
     bool proto_wh1080;
     bool proto_tx38it;
     bool proto_tx35it;
     bool proto_ws1600;
     bool proto_wt440xh;
+    bool proto_w136;
     bool proto_tx22it;
     bool proto_emt7110;
-    bool proto_w136;
     bool proto_wh24;
     bool proto_wh25;
+    bool proto_wh65b;
+    bool proto_hp1000;
+    bool proto_tfa1;
+    
+    byte lora_frequency;   // 0=433MHz, 1=868MHz, 2=915MHz
+    uint16_t freq_toggle_interval;
+    
+    bool changed;
 };
 
 extern Config config;
-extern Cache fcache[];
+extern Cache fcache[SENSOR_NUM];
 extern String id2name[SENSOR_NUM];
 extern uint8_t hass_cfg[SENSOR_NUM];
 extern bool littlefs_ok;
 extern bool mqtt_ok;
+extern int get_current_datarate();
+extern int get_interval();
 
 static inline uint32_t uptime_sec() { return (esp_timer_get_time()/(int64_t)1000000); }
-
-int get_current_datarate();
-int get_interval();
 
 #endif
