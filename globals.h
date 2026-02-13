@@ -17,7 +17,7 @@
 #define LORA_CS 18 // GPIO18 - SX1276 CS
 #define LORA_RST 14 // GPIO14 - SX1276 RST
 #define LORA_IRQ 26 // GPIO26 - SX1276 IRQ (interrupt request)
-#define SS 5  // Standardwert für ESP32
+#define SS 18  // Heltec (Standardwert für ESP32 ist 5)
 static const uint8_t KEY_BUILTIN = 0;
 #endif
 #ifndef LED_BUILTIN
@@ -54,6 +54,8 @@ static const uint8_t LED_BUILTIN = 2;
 #define HASS_CFG_POWER (1 << 7)           // NEU
 #define HASS_CFG_ENERGY (1 << 8)          // NEU
 #define HASS_CFG_PRESSURE (1 << 9)        // NEU
+#define HASS_CFG_UV (1 << 10)             // NEU für UV-Index
+#define HASS_CFG_LIGHT (1 << 11)          // NEU für Lichtintensität
 
 #define BASE_SENSOR_TIMEOUT 300000   // 5 Minuten Basis-Timeout
 #define TIMEOUT_PER_PROTOCOL 60000   // +1 Minute pro aktiviertem Protokoll
@@ -95,9 +97,15 @@ struct Cache {
     float energy;         // Energie in kWh
     unsigned long power_timestamp;
     
-    // Luftdruck-Daten für WH24/WH25
+    // Luftdruck-Daten für WH24/WH25/HP1000/WH65B
     float pressure;       // Luftdruck in hPa
     unsigned long pressure_timestamp;
+    
+    // UV und Licht-Daten für HP1000/WH65B (NEU)
+    uint8_t uv;           // UV-Index (0-15)
+    float light_lux;      // Lichtintensität in Lux
+    unsigned long uv_timestamp;
+    unsigned long light_timestamp;
 };
 
 // Hilfsfunktion für Cache-Index
@@ -127,6 +135,8 @@ struct Config {
     bool proto_w136;
     bool proto_wh24;
     bool proto_wh25;
+    bool proto_hp1000;    // NEU
+    bool proto_wh65b;     // NEU
     int toggle_interval_ms; 
 };
 
@@ -134,6 +144,7 @@ extern Config config;
 extern Cache fcache[];
 extern String id2name[SENSOR_NUM];
 extern uint8_t hass_cfg[SENSOR_NUM];
+extern uint16_t hass_published[SENSOR_NUM];
 extern bool littlefs_ok;
 extern bool mqtt_ok;
 

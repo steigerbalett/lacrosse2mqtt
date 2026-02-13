@@ -131,7 +131,8 @@ bool load_config()
     config.proto_emt7110 = false;  
     config.proto_wh24 = false;
     config.proto_wh25 = false;
-    
+    config.proto_hp1000 = false;
+    config.proto_wh65b = false;    
     config.toggle_interval_ms = 20000; /* default: 20 Sekunden */
 
     if (!littlefs_ok)
@@ -194,6 +195,10 @@ bool load_config()
             config.proto_wh24 = doc["proto_wh24"];
         if (!doc["proto_wh25"].isNull())
             config.proto_wh25 = doc["proto_wh25"];
+        if (!doc["proto_hp1000"].isNull())
+            config.proto_hp1000 = doc["proto_hp1000"];
+        if (!doc["proto_wh65b"].isNull())
+            config.proto_wh65b = doc["proto_wh65b"];
         if (doc["toggle_interval_ms"])
             config.toggle_interval_ms = doc["toggle_interval_ms"];
             
@@ -217,6 +222,8 @@ bool load_config()
         Serial.println("proto_emt7110: " + String(config.proto_emt7110));
         Serial.println("proto_wh24: " + String(config.proto_wh24));
         Serial.println("proto_wh25: " + String(config.proto_wh25));
+        Serial.println("proto_hp1000: " + String(config.proto_hp1000));
+        Serial.println("proto_wh65b: " + String(config.proto_wh65b));
         Serial.println("toggle_interval_ms: " + String(config.toggle_interval_ms));
     }
     
@@ -257,6 +264,8 @@ bool save_config()
     doc["proto_emt7110"] = config.proto_emt7110;
     doc["proto_wh24"] = config.proto_wh24;
     doc["proto_wh25"] = config.proto_wh25;
+    doc["proto_hp1000"] = config.proto_hp1000;
+    doc["proto_wh65b"] = config.proto_wh65b;
     doc["toggle_interval_ms"] = config.toggle_interval_ms;
     
     if (serializeJson(doc, cfg) == 0) {
@@ -463,6 +472,8 @@ void add_current_table(String &s, bool rawdata)
     bool hasRain = false;
     bool hasPower = false;
     bool hasPressure = false;
+    bool hasUV = false;
+    bool hasLight = false;
     
     for (int i = 0; i < SENSOR_NUM; i++)
     {
@@ -486,6 +497,10 @@ void add_current_table(String &s, bool rawdata)
             hasPower = true;
         if (fcache[i].pressure > 0)
             hasPressure = true;
+        if (fcache[i].uv > 0 && fcache[i].uv <= 15)
+         hasUV = true;
+        if (fcache[i].light_lux > 0)
+            hasLight = true;
     }
     
     // SCHRITT 2: Baue Tabellenkopf dynamisch
@@ -513,6 +528,11 @@ void add_current_table(String &s, bool rawdata)
         s += "<th>Power</th>";
     if (hasPressure)
         s += "<th>Pressure</th>";
+    if (hasUV)
+        s += "<th>UV Index</th>";
+    if (hasLight)
+        s += "<th>Light</th>";
+
     
     s += "<th>RSSI</th>";
     s += "<th>Name</th>";
@@ -631,6 +651,25 @@ void add_current_table(String &s, bool rawdata)
                 s += "<td>-</td>";
             }
         }
+        
+        // UV Index (nur wenn Spalte sichtbar)
+        if (hasUV) {
+            if (fcache[i].uv > 0 && fcache[i].uv <= 15) {
+                s += "<td>" + String(fcache[i].uv) + "</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
+        // Light (nur wenn Spalte sichtbar)
+        if (hasLight) {
+            if (fcache[i].light_lux > 0) {
+                s += "<td>" + String(fcache[i].light_lux, 0) + " lx</td>";
+            } else {
+                s += "<td>-</td>";
+            }
+        }
+
 
         // RSSI
         s += "<td>" + String(fcache[i].rssi) + "</td>";
@@ -739,11 +778,20 @@ void handle_sensors_json() {
         } else {
             sensor["power"] = nullptr;
         }
-        
         if (fcache[i].pressure > 0) {
             sensor["pressure"] = serialized(String(fcache[i].pressure, 1));
         } else {
             sensor["pressure"] = nullptr;
+        }
+        if (fcache[i].uv > 0 && fcache[i].uv <= 15) {
+            sensor["uv"] = fcache[i].uv;
+        } else {
+            sensor["uv"] = nullptr;
+        }
+        if (fcache[i].light_lux > 0) {
+            sensor["light_lux"] = serialized(String(fcache[i].light_lux, 0));
+        } else {
+            sensor["light_lux"] = nullptr;
         }
         
         sensor["rssi"] = fcache[i].rssi;
@@ -2306,7 +2354,9 @@ void handle_config() {
         bool new_emt7110 = (server.hasArg("proto_emt7110") && server.arg("proto_emt7110") == "1");
         bool new_wh24 = (server.hasArg("proto_wh24") && server.arg("proto_wh24") == "1");
         bool new_wh25 = (server.hasArg("proto_wh25") && server.arg("proto_wh25") == "1");
-        
+        bool new_hp1000 = (server.hasArg("proto_hp1000") && server.arg("proto_hp1000") == "1");
+        bool new_wh65b = (server.hasArg("proto_wh65b") && server.arg("proto_wh65b") == "1");
+
         // Prüfe auf Änderungen und update
         if (new_lacrosse != config.proto_lacrosse) {
             config.proto_lacrosse = new_lacrosse;
@@ -2374,6 +2424,19 @@ void handle_config() {
             config.changed = true;
             Serial.println("WH25 protocol changed to: " + String(config.proto_wh25));
         }
+        if (new_hp1000 != config.proto_hp1000) {
+            config.proto_hp1000 = new_hp1000;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("HP1000 protocol changed to: " + String(config.proto_hp1000));
+        }
+        if (new_wh65b != config.proto_wh65b) {
+            config.proto_wh65b = new_wh65b;
+            config_changed = true;
+            config.changed = true;
+            Serial.println("WH65B protocol changed to: " + String(config.proto_wh65b));
+        }
+
     }
     
     String resp;
@@ -2449,7 +2512,7 @@ void handle_config() {
     if (config.proto_tx38it) {
         resp += "<span class='status-badge status-ok'>8.8k</span>";
     }
-    if (config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || config.proto_tx22it || config.proto_emt7110) {
+    if (config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || config.proto_tx22it || config.proto_emt7110 || config.proto_hp1000 || config.proto_wh65b) {
         resp += "<span class='status-badge status-ok'>6.6k</span>";
     }
     if (config.proto_w136) {
@@ -2459,7 +2522,7 @@ void handle_config() {
     bool any_active = config.proto_lacrosse || config.proto_tx35it || config.proto_tx38it || 
                       config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || 
                       config.proto_w136 || config.proto_tx22it || config.proto_emt7110 ||
-                      config.proto_wh24 || config.proto_wh25;
+                      config.proto_wh24 || config.proto_wh25 || config.proto_hp1000 || config.proto_wh65b;
     
     if (!any_active) {
         resp += "<span class='status-badge status-error'>⚠ None</span>";
@@ -2862,6 +2925,34 @@ void handle_config() {
     resp += "</label>";
     resp += "</div>";
     resp += "<div class='option-description'>EMT7110 energy meter with power/energy data (6.618 kbps)</div>";
+    resp += "</div>";
+
+    // HP1000
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>HP1000 Weather Station</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_hp1000' value='1'";
+    if (config.proto_hp1000) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable HP1000 Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>HP1000 weather station with UV, Light, Pressure at 868.300 MHz (6.618 kbps)</div>";
+    resp += "</div>";
+    
+    // WH65B
+    resp += "<div class='radio-group' style='margin-top: 8px;'>";
+    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH65B Weather Station</h4>";
+    resp += "<div class='radio-item'>";
+    resp += "<label>";
+    resp += "<input type='checkbox' name='proto_wh65b' value='1'";
+    if (config.proto_wh65b) resp += checked;
+    resp += " onchange='this.form.submit()'>";
+    resp += "Enable WH65B Protocol";
+    resp += "</label>";
+    resp += "</div>";
+    resp += "<div class='option-description'>WH65B weather station with UV, Light at 868.300 MHz (6.618 kbps)</div>";
     resp += "</div>";
     
     resp += "</div>"; // Ende 6.618 kbps Gruppe
