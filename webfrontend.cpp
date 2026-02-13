@@ -714,12 +714,17 @@ void add_current_table(String &s, bool rawdata)
     s += "</tbody>\n";
     s += "</table>\n";
     
+    s += "<div class='refresh-control'>";
     // Info-Zeile
-    if (sensorCount == 0) {
-        s += "<p><em>No sensors found. Waiting for data...</em></p>\n";
-    } else {
-        s += "<p id='sensor-count'><em>Total sensors: " + String(sensorCount) + "</em></p>\n";
-    }
+    s += "<p id='sensor-count'><em>Total sensors: " + String(sensorCount) + "</em></p>\n";
+    //resp += "<div class='card'>";
+    s += "<div>";
+    //resp += "<strong>Automatic Data Refresh</strong><br>";
+    s += "<span style='font-size:12px;color:var(--secondary-text-color)'>System status updates every 5 seconds</span><br>";
+    s += "<span class='refresh-status' id='refresh-status' style='font-size:12px;'>⏳ Starting...</span>";
+    s += "</div>";
+    s += "<button id='auto-refresh-btn' onclick='toggleAutoRefresh()' style='background-color:var(--warning-color);min-width:120px;'>⏸️ Pause Auto-Refresh</button>";
+    s += "</div>";
 }
 
 // JSON-Endpoint für Sensordaten
@@ -1960,16 +1965,7 @@ void handle_index()
     add_current_table(index, true);
     index += "</div>";
     
-    index += "<div class='card card-full'>";
-    index += "<div style='display:flex;justify-content:space-between;align-items:center;padding:8px;background-color:var(--secondary-background-color);border-radius:4px;'>";
-    index += "<div>";
-    index += "<strong>Automatic Data Refresh</strong><br>";
-    index += "<span style='font-size:12px;color:var(--secondary-text-color)'>Sensor data updates every 5 seconds</span><br>";
-    index += "<span class='refresh-status' id='refresh-status' style='font-size:12px;'>⏳ Starting...</span>";
-    index += "</div>";
-    index += "<button id='auto-refresh-btn' onclick='toggleAutoRefresh()' style='background-color:var(--warning-color);min-width:100px;'>⏸️ Pause Auto-Refresh</button>";
-    index += "</div>";
-    index += "</div>";
+//    index += "</div>";
 
     add_sysinfo_footer(index);
     server.send(200, "text/html", index);
@@ -2208,6 +2204,7 @@ static bool config_changed = false;
 
 void handle_config() {
     static unsigned long token = millis();
+    static bool just_saved = false;
     
     if (server.hasArg("id") && server.hasArg("name")) {
         String _id = server.arg("id");
@@ -2248,6 +2245,7 @@ void handle_config() {
             save_idmap();
             save_config();
             config_changed = false;
+            just_saved = true;
         }
     }
     if (server.hasArg("debug_mode")) {
@@ -2438,10 +2436,24 @@ void handle_config() {
         }
 
     }
+
+    token = millis();
     
     String resp;
     add_header(resp, "LaCrosse2MQTT Configuration");
     
+if (just_saved) {
+        resp += "<div style='position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; "
+                "background: linear-gradient(135deg, #4caf50, #45a049); color: white; padding: 16px 32px; "
+                "border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 500; "
+                "animation: slideDown 0.3s ease-out;'>"
+                "✓ Configuration saved successfully! Protocol changes applied immediately."
+                "</div>"
+                "<style>@keyframes slideDown { from { top: -50px; opacity: 0; } to { top: 20px; opacity: 1; } }</style>"
+                "<script>setTimeout(function(){ location.reload(); }, 3000);</script>";
+        just_saved = false;
+    }
+
     resp += "<div class='card-grid'>";
     
     resp += "<div class='card'>";
@@ -2533,6 +2545,33 @@ void handle_config() {
     resp += "<span class='info-text' style='color: var(--secondary-text-color);'>(⟳ " + String(interval_sec) + "s)</span>";
     resp += "</p>";
 
+if (any_active && interval_sec > 0) {
+    resp += "<p class='info-text' style='font-size: 12px; color: var(--secondary-text-color);'>";
+    
+    // Berechne Anzahl aktiver Datenraten
+    int active_count = 0;
+    if (config.proto_lacrosse || config.proto_wh24 || config.proto_wh25) active_count++;
+    if (config.proto_tx35it) active_count++;
+    if (config.proto_tx38it) active_count++;
+    if (config.proto_wh1080 || config.proto_ws1600 || config.proto_wt440xh || 
+        config.proto_tx22it || config.proto_emt7110 || config.proto_hp1000 || config.proto_wh65b) active_count++;
+    if (config.proto_w136) active_count++;
+    
+     resp += "<p class='info-text' style='font-size: 12px; color: var(--secondary-text-color);'>";
+    
+    if (active_count > 1) {
+        // Countdown anzeigen
+        int next_in = interval_sec - ((millis() - last_toggle_time) / 1000);
+        if (next_in < 0) next_in = 0;
+        
+        resp += "Rotating between " + String(active_count) + " rates | Next switch in ~" + String(next_in) + " seconds";
+    } else {
+        resp += "Single rate active - no rotation needed";
+    }
+    
+    resp += "</p>";
+}
+
     resp += "<h2>Actions</h2>";
     resp += "<div class='action-buttons'>";
     resp += "<a href='/update' class='action-button'>📦 Local Firmware update</a>";
@@ -2544,7 +2583,7 @@ void handle_config() {
 
         resp += "<div class='info-row' style='margin-top:15px;'>";
     resp += "<button onclick='confirmReboot()' style='width:100%;padding:12px;background-color:#dc3545;color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.3s ease;'>";
-    resp += "🔄 System neu starten";
+    resp += "🔄 Reboot";
     resp += "</button>";
     resp += "</div>";
     
@@ -2760,237 +2799,239 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
 
-    resp += "<div class='card'>";
-    resp += "<h2>📡 Protocol Settings</h2>";
-    resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Protocols are grouped by data rate. Changes require saving configuration.</p>";
-    resp += "<form action='/config.html'>";
-    
-    // ========== 17.241 kbps ==========
-    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(3, 169, 244, 0.05); border-radius: 8px; border-left: 4px solid var(--primary-color);'>";
-    resp += "<h3 style='margin: 0 0 12px 0; color: var(--primary-color); font-size: 16px;'>⚡ 17.241 kbps</h3>";
-    
-    // LaCrosse IT+
-    resp += "<div class='radio-group'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>LaCrosse IT+</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_lacrosse' value='1'";
-    if (config.proto_lacrosse) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable LaCrosse IT+ Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>TX29-IT, TX27-IT, TX25-U, TX29DTH-IT sensors (17.241 kbps)</div>";
-    resp += "</div>";
-    
-    // WH24
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH24 Weather Sensor</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_wh24' value='1'";
-    if (config.proto_wh24) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable WH24 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>WH24 outdoor sensor at 868.300 MHz (17.241 kbps)</div>";
-    resp += "</div>";
-    
-    // WH25
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH25 Pressure Sensor</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_wh25' value='1'";
-    if (config.proto_wh25) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable WH25 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>WH25 barometric pressure sensor at 868.300 MHz (17.241 kbps)</div>";
-    resp += "</div>";
-    
-    resp += "</div>"; // Ende 17.241 kbps Gruppe
-    
-    // ========== 9.579 kbps ==========
-    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(76, 175, 80, 0.05); border-radius: 8px; border-left: 4px solid var(--success-color);'>";
-    resp += "<h3 style='margin: 0 0 12px 0; color: var(--success-color); font-size: 16px;'>⚡ 9.579 kbps</h3>";
-    
-    // TX35IT
-    resp += "<div class='radio-group'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TX35-IT/TX35DTH-IT</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_tx35it' value='1'";
-    if (config.proto_tx35it) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable TX35-IT Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>TX35-IT, TX35DTH-IT sensors (9.579 kbps)</div>";
-    resp += "</div>";
-    
-    resp += "</div>"; // Ende 9.579 kbps Gruppe
-    
-    // ========== 8.842 kbps ==========
-    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(255, 152, 0, 0.05); border-radius: 8px; border-left: 4px solid var(--warning-color);'>";
-    resp += "<h3 style='margin: 0 0 12px 0; color: var(--warning-color); font-size: 16px;'>⚡ 8.842 kbps</h3>";
-    
-    // TX38IT
-    resp += "<div class='radio-group'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TX38-IT Indoor</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_tx38it' value='1'";
-    if (config.proto_tx38it) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable TX38-IT Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>TX38-IT indoor temperature sensors (8.842 kbps)</div>";
-    resp += "</div>";
-    
-    resp += "</div>"; // Ende 8.842 kbps Gruppe
-    
-    // ========== 6.618 kbps ==========
-    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(33, 150, 243, 0.05); border-radius: 8px; border-left: 4px solid var(--info-color);'>";
-    resp += "<h3 style='margin: 0 0 12px 0; color: var(--info-color); font-size: 16px;'>⚡ 6.618 kbps</h3>";
-    
-    // WH1080
-    resp += "<div class='radio-group'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH1080 Weather Station</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_wh1080' value='1'";
-    if (config.proto_wh1080) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable WH1080 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>Complete weather stations with wind, rain, temperature data (6.618 kbps)</div>";
-    resp += "</div>";
-    
-    // WS1600
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WS1600 Weather</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_ws1600' value='1'";
-    if (config.proto_ws1600) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable WS1600 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>WS1600 weather sensors (6.618 kbps)</div>";
-    resp += "</div>";
-    
-    // WT440XH
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WT440XH Temp/Humidity</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_wt440xh' value='1'";
-    if (config.proto_wt440xh) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable WT440XH Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>Compact temperature/humidity sensors (6.618 kbps)</div>";
-    resp += "</div>";
-    
-    // TX22IT
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>TX22-IT Weather Station</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_tx22it' value='1'";
-    if (config.proto_tx22it) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable TX22-IT Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>TX22-IT complete weather station (6.618 kbps)</div>";
-    resp += "</div>";
-    
-    // EMT7110
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>EMT7110 Energy Meter</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_emt7110' value='1'";
-    if (config.proto_emt7110) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable EMT7110 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>EMT7110 energy meter with power/energy data (6.618 kbps)</div>";
-    resp += "</div>";
-
-    // HP1000
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>HP1000 Weather Station</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_hp1000' value='1'";
-    if (config.proto_hp1000) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable HP1000 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>HP1000 weather station with UV, Light, Pressure at 868.300 MHz (6.618 kbps)</div>";
-    resp += "</div>";
-    
-    // WH65B
-    resp += "<div class='radio-group' style='margin-top: 8px;'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>WH65B Weather Station</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_wh65b' value='1'";
-    if (config.proto_wh65b) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable WH65B Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>WH65B weather station with UV, Light at 868.300 MHz (6.618 kbps)</div>";
-    resp += "</div>";
-    
-    resp += "</div>"; // Ende 6.618 kbps Gruppe
-    
-    // ========== 4.800 kbps ==========
-    resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(156, 39, 176, 0.05); border-radius: 8px; border-left: 4px solid #9c27b0;'>";
-    resp += "<h3 style='margin: 0 0 12px 0; color: #9c27b0; font-size: 16px;'>⚡ 4.800 kbps</h3>";
-    
-    // W136
-    resp += "<div class='radio-group'>";
-    resp += "<h4 style='margin: 8px 0; font-size: 14px; color: var(--primary-text-color);'>W136</h4>";
-    resp += "<div class='radio-item'>";
-    resp += "<label>";
-    resp += "<input type='checkbox' name='proto_w136' value='1'";
-    if (config.proto_w136) resp += checked;
-    resp += " onchange='this.form.submit()'>";
-    resp += "Enable W136 Protocol";
-    resp += "</label>";
-    resp += "</div>";
-    resp += "<div class='option-description'>W136 weather sensors at 869.820 MHz (4.800 kbps)</div>";
-    resp += "</div>";
-    
-    resp += "</div>"; // Ende 4.800 kbps Gruppe
-    
-    resp += "</form>";
-    resp += "</div>";
-
-
-    resp += "</div>";
-    
     resp += "<div class='card card-full'>";
-    resp += "<div class='refresh-control'>";
-    resp += "<div>";
-    resp += "<strong>Automatic Data Refresh</strong><br>";
-    resp += "<span style='font-size:12px;color:var(--secondary-text-color)'>System status updates every 5 seconds</span><br>";
-    resp += "<span class='refresh-status' id='refresh-status' style='font-size:12px;'>⏳ Starting...</span>";
-    resp += "</div>";
-    resp += "<button id='auto-refresh-btn' onclick='toggleAutoRefresh()' style='background-color:var(--warning-color);min-width:120px;'>⏸️ Pause Auto-Refresh</button>";
+resp += "<h2>📡 Protocol Settings</h2>";
+resp += "<p class='info-text'>Enable or disable support for specific sensor protocols. Protocols are grouped by data rate.</p>";
+
+// Info-Box für Live-Reload
+resp += "<div style='background-color: rgba(76, 175, 80, 0.1); border-left: 4px solid var(--success-color); "
+        "padding: 12px; margin: 12px 0; border-radius: 4px;'>";
+resp += "<p style='margin: 0; font-size: 13px;'>";
+resp += "<strong>✓ Live Configuration:</strong> Protocol changes take effect immediately after saving - no restart required. "
+        "The receiver will automatically switch to the new data rates.";
+resp += "</p>";
+resp += "</div>";
+
+resp += "<form action='/config.html'>";
+
+// ========== 17.241 kbps Grid ==========
+resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(3, 169, 244, 0.05); border-radius: 8px; border-left: 4px solid var(--primary-color);'>";
+resp += "<h3 style='margin: 0 0 16px 0; color: var(--primary-color); font-size: 16px;'>⚡ 17.241 kbps</h3>";
+
+// Grid Container
+resp += "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;'>";
+
+// LaCrosse IT+
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_lacrosse' value='1'";
+if (config.proto_lacrosse) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>LaCrosse IT+</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>TX29-IT, TX27-IT, TX25-U, TX29DTH-IT sensors</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// WH24
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_wh24' value='1'";
+if (config.proto_wh24) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>WH24 Weather Sensor</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>WH24 outdoor sensor at 868.300 MHz</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// WH25
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_wh25' value='1'";
+if (config.proto_wh25) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>WH25 Pressure Sensor</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Barometric pressure sensor at 868.300 MHz</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+resp += "</div>"; // Ende Grid
+resp += "</div>"; // Ende 17.241 kbps
+
+// ========== 9.579 kbps Grid ==========
+resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(76, 175, 80, 0.05); border-radius: 8px; border-left: 4px solid var(--success-color);'>";
+resp += "<h3 style='margin: 0 0 16px 0; color: var(--success-color); font-size: 16px;'>⚡ 9.579 kbps</h3>";
+
+resp += "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;'>";
+
+// TX35IT
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_tx35it' value='1'";
+if (config.proto_tx35it) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>TX35-IT/TX35DTH-IT</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Temperature/Humidity sensors</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+resp += "</div>"; // Ende Grid
+resp += "</div>"; // Ende 9.579 kbps
+
+// ========== 8.842 kbps Grid ==========
+resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(255, 152, 0, 0.05); border-radius: 8px; border-left: 4px solid var(--warning-color);'>";
+resp += "<h3 style='margin: 0 0 16px 0; color: var(--warning-color); font-size: 16px;'>⚡ 8.842 kbps</h3>";
+
+resp += "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;'>";
+
+// TX38IT
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_tx38it' value='1'";
+if (config.proto_tx38it) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>TX38-IT Indoor</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Indoor temperature sensors</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+resp += "</div>"; // Ende Grid
+resp += "</div>"; // Ende 8.842 kbps
+
+// ========== 6.618 kbps Grid (VIELE SENSOREN) ==========
+resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(33, 150, 243, 0.05); border-radius: 8px; border-left: 4px solid var(--info-color);'>";
+resp += "<h3 style='margin: 0 0 16px 0; color: var(--info-color); font-size: 16px;'>⚡ 6.618 kbps</h3>";
+
+resp += "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;'>";
+
+// WH1080
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_wh1080' value='1'";
+if (config.proto_wh1080) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>WH1080 Weather Station</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Complete weather station with wind, rain, temperature</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// WS1600
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_ws1600' value='1'";
+if (config.proto_ws1600) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>WS1600 Weather</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Weather sensors with multi-channel</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// WT440XH
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_wt440xh' value='1'";
+if (config.proto_wt440xh) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>WT440XH Temp/Humidity</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Compact temperature/humidity sensors</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// TX22IT
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_tx22it' value='1'";
+if (config.proto_tx22it) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>TX22-IT Weather Station</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Complete weather station</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// EMT7110
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_emt7110' value='1'";
+if (config.proto_emt7110) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>EMT7110 Energy Meter</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Energy meter with power/energy data</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// HP1000
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_hp1000' value='1'";
+if (config.proto_hp1000) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>HP1000 Weather Station</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Weather station with UV, Light, Pressure at 868.300 MHz</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+// WH65B
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_wh65b' value='1'";
+if (config.proto_wh65b) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>WH65B Weather Station</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Weather station with UV, Light at 868.300 MHz</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+resp += "</div>"; // Ende Grid
+resp += "</div>"; // Ende 6.618 kbps
+
+// ========== 4.800 kbps Grid ==========
+resp += "<div style='margin: 20px 0; padding: 16px; background-color: rgba(156, 39, 176, 0.05); border-radius: 8px; border-left: 4px solid #9c27b0;'>";
+resp += "<h3 style='margin: 0 0 16px 0; color: #9c27b0; font-size: 16px;'>⚡ 4.800 kbps</h3>";
+
+resp += "<div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;'>";
+
+// W136
+resp += "<div style='background-color: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 6px; padding: 12px;'>";
+resp += "<label style='display: flex; align-items: flex-start; cursor: pointer; margin: 0;'>";
+resp += "<input type='checkbox' name='proto_w136' value='1'";
+if (config.proto_w136) resp += checked;
+resp += " onchange='this.form.submit()' style='margin-top: 2px;'>";
+resp += "<div style='margin-left: 10px;'>";
+resp += "<div style='font-weight: 500; color: var(--primary-text-color); margin-bottom: 4px;'>W136</div>";
+resp += "<div style='font-size: 11px; color: var(--secondary-text-color); line-height: 1.4;'>Weather sensors at 869.820 MHz</div>";
+resp += "</div>";
+resp += "</label>";
+resp += "</div>";
+
+resp += "</div>"; // Ende Grid
+resp += "</div>"; // Ende 4.800 kbps
+
+resp += "</form>";
+resp += "</div>"; // Ende card-full
+
     resp += "</div>";
     resp += "</div>";
     

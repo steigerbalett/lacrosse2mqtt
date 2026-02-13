@@ -90,6 +90,7 @@ int get_current_datarate() {
 int get_interval() {
     return config.toggle_interval_ms / 1000;  // Konvertiere ms zu Sekunden
 }
+unsigned long last_toggle_time = 0;
 
 String wifi_disp;
 bool showing_starfield = false;

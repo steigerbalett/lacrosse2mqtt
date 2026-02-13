@@ -135,11 +135,13 @@ struct Config {
     bool proto_w136;
     bool proto_wh24;
     bool proto_wh25;
-    bool proto_hp1000;    // NEU
-    bool proto_wh65b;     // NEU
+    bool proto_hp1000;
+    bool proto_wh65b;
     int toggle_interval_ms; 
 };
 
+extern int num_datarates;
+extern unsigned long last_toggle_time;
 extern Config config;
 extern Cache fcache[];
 extern String id2name[SENSOR_NUM];
