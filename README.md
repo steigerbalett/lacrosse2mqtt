@@ -42,8 +42,6 @@ On the config page, you can enter the hostname / IP of your MQTT broker. The top
  * Upload the bin file (follow the instuctions).
 
 ## Firmware update
-Use the buildin Online Firmware Updater
-Or:
 Download newest firmware (lacrose2mqtt.YYYY.XX.X.bin) at the [release page](https://github.com/steigerbalett/lacrosse2mqtt/releases).
 The software update can be uploaded via the "Update software" link from the configuration page
 
@@ -70,6 +68,8 @@ The following libraries are needed for building (could all be installed via ardu
 
 ## Nice2have
  * Add FHEM connector
+ * Avoid 0.000kbs decode
+ * Avoid send ID data over MQTT if name is chosen
 
 ## Know problems
 
@@ -79,3 +79,8 @@ This project uses code and protocol descriptions derived from
 [LaCrosseITPlusReader10](https://github.com/rinie/LaCrosseITPlusReader10),
 which itself is based on the LaCrosse IT+ Reader contributed to the
 [FHEM](https://fhem.de/) project. See `LICENSES.md` for details.
+
+
+## Licenses and Attributions
+
+This project uses code derived from FHEM protocol implementations and various open-source libraries. For complete license information and attributions, see [LICENSES.md](LICENSES.md).

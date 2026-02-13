@@ -272,6 +272,24 @@ These libraries are part of the ESP32 Arduino Core and are licensed under the LG
 
 ---
 
+### LaCrosse Gateway (Original)
+
+**Author:** Stefan Seyfried
+**Repository:** https://github.com/seife/LaCrosseGateway
+**License:** GPL-2.0
+**Purpose:** Foundation for LaCrosse IT+ sensor reception using ESP32 and LoRa modules
+
+---
+
+### Arduino Core for ESP32
+
+**Developer:** Espressif Systems
+**Repository:** https://github.com/espressif/arduino-esp32
+**License:** LGPL-2.1
+**Purpose:** ESP32 platform support, including HTTPUpdateServer, WiFi, and core libraries
+
+---
+
 ### LaCrosseITPlusReader10
 
 Teile des Codes (insbesondere Protokoll-Decoder für WH24/WH25/W136 sowie serielle FHEM‑Anbindung) basieren auf:
@@ -280,6 +298,45 @@ Teile des Codes (insbesondere Protokoll-Decoder für WH24/WH25/W136 sowie seriel
 - Autor: rinie (und weitere Mitwirkende)
 - Ursprung: LaCrosse IT+ Reader aus dem FHEM‑Projekt  
   (siehe Link im README von LaCrosseITPlusReader10)
+
+---
+
+### RTL-433 - Generic Radio Signal Decoder
+
+**Repository:** https://github.com/merbanan/rtl_433
+**Purpose:** Protocol documentation and reference for 433/868MHz sensors
+**License:** GPL-2.0
+
+---
+
+### WH1080 Protocol Documentation
+
+**Source:** SevenWatt.com
+**URL:** http://www.sevenwatt.com/main/wh1080-protocol-v2-fsk/
+**Purpose:** WH1080 weather station protocol specification
+
+---
+
+### NetHome Coders - Weather Station Decoders
+
+**Repository:** https://github.com/NetHome/Coders
+**Purpose:** Reference implementations for weather station protocols
+**License:** LGPL v3.0
+
+---
+
+### FHEM - Home Automation Server
+
+**Project:** FHEM (Freundliche Hausautomation und Energie-Messung)
+**Website:** https://fhem.de/
+**Repository:** https://github.com/fhem/fhem-mirror
+**License:** GPL v2
+**Purpose:** Protocol reference implementations
+
+Relevant modules used as reference:
+- 36_LaCrosse.pm - LaCrosse IT+ sensor protocol decoder
+- 14_SD_WS.pm - Weather station protocols (WH1080, WS1600, etc.)
+- SIGNALduino - Radio signal processing foundation
 
 ---
 

@@ -49,7 +49,7 @@ unsigned long last_ntp_check = 0;
 #define FORMAT_LITTLEFS_IF_FAILED false
 #define DISPLAY_TIMEOUT 300
 
-const int interval = 20;
+const int interval = 20; // Fallback
 const int freq = 868290;
 
 unsigned long last_reconnect;
@@ -86,7 +86,7 @@ int get_current_datarate() {
 }
 
 int get_interval() {
-    return interval;
+    return config.toggle_interval_ms / 1000;  // Konvertiere ms zu Sekunden
 }
 
 String wifi_disp;
@@ -251,7 +251,7 @@ void check_ntp_sync() {
 void check_repeatedjobs()
 {
     unsigned long now = millis();
-    if (now - last_switch > interval * 1000) {
+    if (now - last_switch > config.toggle_interval_ms) {
         SX.NextDataRate();
         last_switch = now;
     }

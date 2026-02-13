@@ -132,6 +132,8 @@ bool load_config()
     config.proto_wh24 = false;
     config.proto_wh25 = false;
     
+    config.toggle_interval_ms = 20000; /* default: 20 Sekunden */
+
     if (!littlefs_ok)
         return false;
     
@@ -184,14 +186,16 @@ bool load_config()
             config.proto_wt440xh = doc["proto_wt440xh"];
         if (!doc["proto_w136"].isNull())
             config.proto_w136 = doc["proto_w136"];
-        if (!doc["proto_tx22it"].isNull())          // NEU
+        if (!doc["proto_tx22it"].isNull())
             config.proto_tx22it = doc["proto_tx22it"];
-        if (!doc["proto_emt7110"].isNull())         // NEU
+        if (!doc["proto_emt7110"].isNull())
             config.proto_emt7110 = doc["proto_emt7110"];
-        if (!doc["proto_wh24"].isNull())            // NEU
+        if (!doc["proto_wh24"].isNull())
             config.proto_wh24 = doc["proto_wh24"];
-        if (!doc["proto_wh25"].isNull())            // NEU
+        if (!doc["proto_wh25"].isNull())
             config.proto_wh25 = doc["proto_wh25"];
+        if (doc["toggle_interval_ms"])
+            config.toggle_interval_ms = doc["toggle_interval_ms"];
             
         Serial.println("result of config.json");
         Serial.println("mqtt_server: " + config.mqtt_server);
@@ -213,6 +217,7 @@ bool load_config()
         Serial.println("proto_emt7110: " + String(config.proto_emt7110));
         Serial.println("proto_wh24: " + String(config.proto_wh24));
         Serial.println("proto_wh25: " + String(config.proto_wh25));
+        Serial.println("toggle_interval_ms: " + String(config.toggle_interval_ms));
     }
     
     cfg.close();
@@ -248,10 +253,11 @@ bool save_config()
     doc["proto_ws1600"] = config.proto_ws1600;
     doc["proto_wt440xh"] = config.proto_wt440xh;
     doc["proto_w136"] = config.proto_w136;
-    doc["proto_tx22it"] = config.proto_tx22it;      // NEU
-    doc["proto_emt7110"] = config.proto_emt7110;    // NEU
-    doc["proto_wh24"] = config.proto_wh24;          // NEU
-    doc["proto_wh25"] = config.proto_wh25;          // NEU
+    doc["proto_tx22it"] = config.proto_tx22it;
+    doc["proto_emt7110"] = config.proto_emt7110;
+    doc["proto_wh24"] = config.proto_wh24;
+    doc["proto_wh25"] = config.proto_wh25;
+    doc["toggle_interval_ms"] = config.toggle_interval_ms;
     
     if (serializeJson(doc, cfg) == 0) {
         Serial.println("FFailed to write config.json");
@@ -487,7 +493,7 @@ void add_current_table(String &s, bool rawdata)
     s += "<table id='sensor-table'>\n";
     s += "<thead><tr>";
     s += "<th>ID</th>";
-//    s += "<th>Ch</th>";
+    s += "<th>Ch</th>";
     s += "<th>Type</th>";
     s += "<th>Temperature</th>";
     
@@ -546,7 +552,7 @@ void add_current_table(String &s, bool rawdata)
         s += "<td>" + String(displayID) + "</td>";
         
         // Channel
-//        s += "<td>" + String(fcache[i].channel) + "</td>";
+        s += "<td>" + String(fcache[i].channel) + "</td>";
         
         // Type
         s += "<td>" + sensorType + "</td>";
@@ -782,220 +788,286 @@ static void add_header(String &s, const String &title)
         "<meta name='viewport' content='width=device-width, initial-scale=1'>";
     
     if (title.indexOf("Gateway") > -1 || title.indexOf("Configuration") > -1) {
-    s += "<script>"
-    "let autoRefreshEnabled=true,refreshInterval=5000,refreshTimer;"
-    "function updateSensorData(){"
-    "if(!autoRefreshEnabled)return;"
-    "fetch('/sensors.json').then(r=>r.json()).then(data=>{"
-    "let hasTempCh2=false,hasHumidity=false,hasWindSpeed=false,hasWindDir=false,hasWindGust=false,hasRain=false,hasPower=false,hasPressure=false;"
-    "data.sensors.forEach(s=>{if(s.temp2!==null)hasTempCh2=true;if(s.humi>0&&s.humi<=100)hasHumidity=true;"
-    "if(s.wind_speed!==null)hasWindSpeed=true;if(s.wind_dir!==null && s.wind_dir>=0 && s.wind_dir<=360)hasWindDir=true;if(s.wind_gust!==null)hasWindGust=true;"
-    "if(s.rain!==null)hasRain=true;if(s.power!==null)hasPower=true;if(s.pressure!==null)hasPressure=true;});"
-    "const t=document.getElementById('sensor-table');if(t){const h=t.querySelector('thead tr');if(h){"
-    "let hh='<th>ID</th><th>Ch</th><th>Type</th><th>Temperature</th>';"
-    "if(hasTempCh2)hh+='<th>Temp 2</th>';if(hasHumidity)hh+='<th>Humidity</th>';"
-    "if(hasWindSpeed)hh+='<th>Wind Speed</th>';if(hasWindDir)hh+='<th>Wind Dir</th>';"
-    "if(hasWindGust)hh+='<th>Wind Gust</th>';if(hasRain)hh+='<th>Rain</th>';"
-    "if(hasPower)hh+='<th>Power</th>';if(hasPressure)hh+='<th>Pressure</th>';"
-    "hh+='<th>RSSI</th><th>Name</th><th>Age (ms)</th><th>Battery</th><th>New Batt</th><th>Raw Frame Data</th>';"
-    "h.innerHTML=hh;}}"
-    "const b=document.getElementById('sensor-tbody');if(b){b.innerHTML='';data.sensors.forEach(s=>{"
-    "const r=b.insertRow();let rh='<td>'+s.id+'</td><td>'+s.ch+'</td><td>'+s.type+'</td><td>'+s.temp+' °C</td>';"
-    "if(hasTempCh2)rh+='<td>'+(s.temp2!==null?s.temp2+' °C':'-')+'</td>';"
-    "if(hasHumidity)rh+='<td>'+(s.humi>0&&s.humi<=100?s.humi+' %':'-')+'</td>';"
-    "if(hasWindSpeed)rh+='<td>'+(s.wind_speed!==null?s.wind_speed+' km/h':'-')+'</td>';"
-    "if(hasWindDir)rh+='<td>'+(s.wind_dir!==null && s.wind_dir>=0?s.wind_dir+'°':'-')+'</td>';"
-    "if(hasWindGust)rh+='<td>'+(s.wind_gust!==null?s.wind_gust+' km/h':'-')+'</td>';"
-    "if(hasRain)rh+='<td>'+(s.rain!==null?s.rain+' mm':'-')+'</td>';"
-    "if(hasPower)rh+='<td>'+(s.power!==null?s.power+' W':'-')+'</td>';"
-    "if(hasPressure)rh+='<td>'+(s.pressure!==null?s.pressure+' hPa':'-')+'</td>';"
-    "rh+='<td>'+s.rssi+'</td><td>'+(s.name||'-')+'</td><td>'+s.age+'</td>'+"
-    "'<td class=\"'+(s.batlo?'batt-weak':'batt-ok')+'\">'+(s.batlo?'weak':'ok')+'</td>'+"
-    "'<td class=\"'+(s.init?'init-new':'init-no')+'\">'+(s.init?'yes':'no')+'</td>'+"
-    "'<td class=\"raw-data\">0x'+s.raw+'</td>';r.innerHTML=rh;});}"
-    "const ss=document.getElementById('system-status');if(ss){"
-    "let sh='';if(data.mqtt_ok)sh+='<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
-    "else sh+='<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
-    "if(data.wifi_ok)sh+='<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
-    "else sh+='<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';ss.innerHTML=sh;}"
-    "const ws=document.getElementById('wifi-ssid');if(ws&&data.wifi_ssid)ws.textContent='SSID: '+data.wifi_ssid;"
-    "const wi=document.getElementById('wifi-ip');if(wi&&data.wifi_ip)wi.textContent='IP: '+data.wifi_ip;"
-    "const up=document.getElementById('system-uptime');if(up&&data.uptime)up.textContent='Uptime: '+data.uptime;"
+s += "<script>"
+"let autoRefreshEnabled=true,refreshInterval=5000,refreshTimer;"
 
-    // CPU Load Update - separates Update für Wert und Balken
-    "const clValue=document.getElementById('cpu-load-value');"
-    "const clBar=document.getElementById('cpu-load-bar');"
-    "if(clValue&&data.cpu_usage){"
-    "clValue.textContent=data.cpu_usage+'%';"
-    "if(data.cpu_usage<50){clValue.style.color='var(--success-color)';if(clBar)clBar.style.background='var(--success-color)';}"
-    "else if(data.cpu_usage<80){clValue.style.color='var(--warning-color)';if(clBar)clBar.style.background='var(--warning-color)';}"
-    "else{clValue.style.color='var(--error-color)';if(clBar)clBar.style.background='var(--error-color)';}"
-    "if(clBar)clBar.style.width=data.cpu_usage+'%';}"
+// KORRIGIERTE updateSensorData() Funktion
+"function updateSensorData(){"
+"if(!autoRefreshEnabled)return;"
+"fetch('/sensors.json').then(r=>r.json()).then(data=>{"
 
-    // Datenrate Updates für beide Seiten (Index + Config)
-    "const dr=document.getElementById('datarate-value');"
-    "if(dr&&data.current_datarate)dr.textContent=data.current_datarate;"
-    "const configDr=document.getElementById('config-datarate-value');"
-    "if(configDr&&data.current_datarate)configDr.textContent=data.current_datarate;"
+// Spalten-Erkennung
+"let hasTempCh2=false,hasHumidity=false,hasWindSpeed=false,hasWindDir=false,hasWindGust=false,hasRain=false,hasPower=false,hasPressure=false;"
+"data.sensors.forEach(s=>{if(s.temp2!==null)hasTempCh2=true;if(s.humi>0&&s.humi<=100)hasHumidity=true;"
+"if(s.wind_speed!==null)hasWindSpeed=true;if(s.wind_dir!==null && s.wind_dir>=0 && s.wind_dir<=360)hasWindDir=true;if(s.wind_gust!==null)hasWindGust=true;"
+"if(s.rain!==null)hasRain=true;if(s.power!==null)hasPower=true;if(s.pressure!==null)hasPressure=true;});"
 
-    // Badge-Hervorhebung der aktiven Datenrate (Config-Seite)
-    "const badgeContainer=document.getElementById('datarate-badges');"
-    "if(badgeContainer&&data.current_datarate){"
-    "const badges=badgeContainer.querySelectorAll('span');"
-    "badges.forEach(badge=>{"
-    "const text=badge.textContent.trim();"
-    "let active=false;"
-    "if(text==='17.2k'&&data.current_datarate==17241)active=true;"
-    "else if(text==='9.6k'&&data.current_datarate==9579)active=true;"
-    "else if(text==='8.8k'&&data.current_datarate==8842)active=true;"
-    "else if(text==='6.6k'&&data.current_datarate==6618)active=true;"
-    "else if(text==='4.8k'&&data.current_datarate==4800)active=true;"
-    "if(active){"
-    "badge.style.backgroundColor='var(--accent-color)';"
-    "badge.style.color='white';"
-    "badge.style.fontWeight='bold';"
-    "}else{"
-    "badge.style.backgroundColor='';"
-    "badge.style.color='';"
-    "badge.style.fontWeight='';}"
-    "});}"
+// Tabellen-Header
+"const t=document.getElementById('sensor-table');if(t){const h=t.querySelector('thead tr');if(h){"
+"let hh='<th>ID</th><th>Ch</th><th>Type</th><th>Temperature</th>';"
+"if(hasTempCh2)hh+='<th>Temp 2</th>';if(hasHumidity)hh+='<th>Humidity</th>';"
+"if(hasWindSpeed)hh+='<th>Wind Speed</th>';if(hasWindDir)hh+='<th>Wind Dir</th>';"
+"if(hasWindGust)hh+='<th>Wind Gust</th>';if(hasRain)hh+='<th>Rain</th>';"
+"if(hasPower)hh+='<th>Power</th>';if(hasPressure)hh+='<th>Pressure</th>';"
+"hh+='<th>RSSI</th><th>Name</th><th>Age (ms)</th><th>Battery</th><th>New Batt</th><th>Raw Frame Data</th>';"
+"h.innerHTML=hh;}}"
 
-    "const ce=document.getElementById('sensor-count');if(ce){"
-    "if(data.count===0)ce.innerHTML='<em>No sensors found. Waiting for data...</em>';"
-    "else ce.innerHTML='<em>Total sensors: '+data.count+' | Last update: '+new Date().toLocaleTimeString()+'</em>';}"
-    "const rs=document.getElementById('refresh-status');if(rs){"
-    "rs.textContent='✓ Live (updated '+new Date().toLocaleTimeString()+')';rs.style.color='var(--success-color)';}}"
-    ").catch(e=>{console.error('Error:',e);const rs=document.getElementById('refresh-status');"
-    "if(rs){rs.textContent='✗ Error';rs.style.color='var(--error-color)';}});}"
-    "function toggleAutoRefresh(){autoRefreshEnabled=!autoRefreshEnabled;"
-    "const btn=document.getElementById('auto-refresh-btn'),st=document.getElementById('refresh-status');"
-    "if(autoRefreshEnabled){btn.textContent='⏸️ Pause Auto-Refresh';btn.style.backgroundColor='var(--warning-color)';"
-    "st.textContent='⏳ Starting...';st.style.color='var(--info-color)';startAutoRefresh();updateSensorData();}"
-    "else{btn.textContent='▶️ Resume Auto-Refresh';btn.style.backgroundColor='var(--success-color)';"
-    "st.textContent='⏸️ Paused';st.style.color='var(--warning-color)';if(refreshTimer)clearInterval(refreshTimer);}}"
-    "function startAutoRefresh(){if(refreshTimer)clearInterval(refreshTimer);"
-    "refreshTimer=setInterval(updateSensorData,refreshInterval);}"
-    "window.addEventListener('DOMContentLoaded',()=>{startAutoRefresh();setTimeout(updateSensorData,1000);});"
-    // Updatecheck
-    "function checkForUpdate(){"
-    "const btn=document.getElementById('check-update-btn');"
-    "const details=document.getElementById('update-details');"
-    "btn.disabled=true;"
-    "btn.textContent='⏳ Checking...';"
-    "fetch('/check-update').then(r=>r.json()).then(data=>{"
-    "btn.disabled=false;"
-    "btn.textContent='Check for Updates';"
-    "if(data.status==='success'){"
+// Tabellen-Body
+"const b=document.getElementById('sensor-tbody');if(b){b.innerHTML='';data.sensors.forEach(s=>{"
+"const r=b.insertRow();let rh='<td>'+s.id+'</td><td>'+s.ch+'</td><td>'+s.type+'</td><td>'+s.temp+' °C</td>';"
+"if(hasTempCh2)rh+='<td>'+(s.temp2!==null?s.temp2+' °C':'-')+'</td>';"
+"if(hasHumidity)rh+='<td>'+(s.humi>0&&s.humi<=100?s.humi+' %':'-')+'</td>';"
+"if(hasWindSpeed)rh+='<td>'+(s.wind_speed!==null?s.wind_speed+' km/h':'-')+'</td>';"
+"if(hasWindDir)rh+='<td>'+(s.wind_dir!==null && s.wind_dir>=0?s.wind_dir+'°':'-')+'</td>';"
+"if(hasWindGust)rh+='<td>'+(s.wind_gust!==null?s.wind_gust+' km/h':'-')+'</td>';"
+"if(hasRain)rh+='<td>'+(s.rain!==null?s.rain+' mm':'-')+'</td>';"
+"if(hasPower)rh+='<td>'+(s.power!==null?s.power+' W':'-')+'</td>';"
+"if(hasPressure)rh+='<td>'+(s.pressure!==null?s.pressure+' hPa':'-')+'</td>';"
+"rh+='<td>'+s.rssi+'</td><td>'+(s.name||'-')+'</td><td>'+s.age+'</td>'+"
+"'<td class=\"'+(s.batlo?'batt-weak':'batt-ok')+'\">'+(s.batlo?'weak':'ok')+'</td>'+"
+"'<td class=\"'+(s.init?'init-new':'init-no')+'\">'+(s.init?'yes':'no')+'</td>'+"
+"'<td class=\"raw-data\">0x'+s.raw+'</td>';r.innerHTML=rh;});}"
+
+// System Status
+"const ss=document.getElementById('system-status');if(ss){"
+"let sh='';if(data.mqtt_ok)sh+='<span class=\"status-badge status-ok\">✓ MQTT Connected</span> ';"
+"else sh+='<span class=\"status-badge status-error\">✗ MQTT Disconnected</span> ';"
+"if(data.wifi_ok)sh+='<span class=\"status-badge status-ok\">✓ WiFi Connected</span>';"
+"else sh+='<span class=\"status-badge status-error\">✗ WiFi Disconnected</span>';ss.innerHTML=sh;}"
+
+"const ws=document.getElementById('wifi-ssid');if(ws&&data.wifi_ssid)ws.textContent='SSID: '+data.wifi_ssid;"
+"const wi=document.getElementById('wifi-ip');if(wi&&data.wifi_ip)wi.textContent='IP: '+data.wifi_ip;"
+"const up=document.getElementById('system-uptime');if(up&&data.uptime)up.textContent='Uptime: '+data.uptime;"
+
+// CPU Load
+"const clValue=document.getElementById('cpu-load-value');"
+"const clBar=document.getElementById('cpu-load-bar');"
+"if(clValue&&data.cpu_usage){"
+"clValue.textContent=data.cpu_usage+'%';"
+"if(data.cpu_usage<50){clValue.style.color='var(--success-color)';if(clBar)clBar.style.background='var(--success-color)';}"
+"else if(data.cpu_usage<80){clValue.style.color='var(--warning-color)';if(clBar)clBar.style.background='var(--warning-color)';}"
+"else{clValue.style.color='var(--error-color)';if(clBar)clBar.style.background='var(--error-color)';}"
+"if(clBar)clBar.style.width=data.cpu_usage+'%';}"
+
+// Datenrate Updates
+"const dr=document.getElementById('datarate-value');"
+"if(dr&&data.current_datarate)dr.textContent=data.current_datarate;"
+"const configDr=document.getElementById('config-datarate-value');"
+"if(configDr&&data.current_datarate)configDr.textContent=data.current_datarate;"
+
+// Badge-Hervorhebung
+"const statusBadges=document.querySelectorAll('.status-badge.status-ok');"
+"if(statusBadges&&data.current_datarate){"
+"statusBadges.forEach(badge=>{"
+"const text=badge.textContent.trim();"
+"let active=false;"
+"if(text==='17.2k'&&data.current_datarate==17241)active=true;"
+"else if(text==='9.6k'&&data.current_datarate==9579)active=true;"
+"else if(text==='8.8k'&&data.current_datarate==8842)active=true;"
+"else if(text==='6.6k'&&data.current_datarate==6618)active=true;"
+"else if(text==='4.8k'&&data.current_datarate==4800)active=true;"
+"if(active){"
+"badge.style.backgroundColor='var(--accent-color)';"
+"badge.style.color='white';"
+"badge.style.fontWeight='bold';"
+"badge.style.transform='scale(1.05)';"
+"badge.style.boxShadow='0 2px 8px rgba(255,152,0,0.5)';"
+"}else{"
+"badge.style.backgroundColor='';"
+"badge.style.color='';"
+"badge.style.fontWeight='';"
+"badge.style.transform='';"
+"badge.style.boxShadow='';}"
+"});}"
+
+// Sensor Count
+"const ce=document.getElementById('sensor-count');if(ce){"
+"if(data.count===0)ce.innerHTML='<em>No sensors found. Waiting for data...</em>';"
+"else ce.innerHTML='<em>Total sensors: '+data.count+' | Last update: '+new Date().toLocaleTimeString()+'</em>';}"
+
+// Status-Update am Ende
+"const us=document.getElementById('refresh-status');if(us){"
+"us.textContent='✓ Live (updated '+new Date().toLocaleTimeString()+')';"
+"us.style.color='var(--success-color)';}"
+"})"
+
+// Error Handler
+".catch(e=>{"
+"console.error('Error:',e);"
+"const us=document.getElementById('refresh-status');"
+"if(us){"
+"us.textContent='✗ Error';"
+"us.style.color='var(--error-color)';}"
+"});"
+"}"
+
+// Reboot-Funktionen
+"function confirmReboot(){"
+"if(confirm('Möchten Sie das System wirklich neu starten?\\n\\nDas Gerät wird für ca. 30 Sekunden nicht erreichbar sein.')){"
+"rebootSystem();"
+"}}"
+
+"function rebootSystem(){"
+"const btn=event.target;"
+"btn.disabled=true;"
+"btn.textContent='⏳ Neustart läuft...';"
+"btn.style.backgroundColor='#6c757d';"
+"fetch('/api/reboot',{method:'POST'})"
+".then(r=>{"
+"if(r.ok)showRebootMessage();"
+"else{"
+"alert('Fehler beim Neustart: HTTP '+r.status);"
+"btn.disabled=false;"
+"btn.textContent='🔄 System neu starten';"
+"btn.style.backgroundColor='#dc3545';"
+"}})"
+".catch(e=>{"
+"console.error('Reboot error:',e);"
+"showRebootMessage();"
+"});}"
+
+"function showRebootMessage(){"
+"document.body.innerHTML='<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;font-family:system-ui;\">';"
+"document.body.innerHTML+='<div style=\"font-size:64px;margin-bottom:20px;\">🔄</div>';"
+"document.body.innerHTML+='<h1 style=\"color:#2c3e50;margin-bottom:10px;\">System wird neu gestartet...</h1>';"
+"document.body.innerHTML+='<p style=\"color:#666;font-size:18px;margin-bottom:30px;\">Bitte warten Sie ca. 30 Sekunden.</p>';"
+"document.body.innerHTML+='<div class=\"spinner\" style=\"border:4px solid #f3f3f3;border-top:4px solid #007bff;border-radius:50%;width:50px;height:50px;animation:spin 1s linear infinite;\"></div>';"
+"document.body.innerHTML+='<style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style></div>';"
+"setTimeout(()=>location.reload(),30000);"
+"let attempts=0;"
+"const checkInterval=setInterval(()=>{"
+"attempts++;"
+"fetch('/',{method:'HEAD',cache:'no-cache'})"
+".then(r=>{if(r.ok){clearInterval(checkInterval);location.reload();}})"
+".catch(()=>{});"
+"if(attempts>60)clearInterval(checkInterval);"
+"},3000);}"
+
+// Auto-Refresh Controls
+"function toggleAutoRefresh(){"
+"autoRefreshEnabled=!autoRefreshEnabled;"
+"const btn=document.getElementById('auto-refresh-btn');"
+"const st=document.getElementById('refresh-status');"
+"if(autoRefreshEnabled){"
+"btn.textContent='⏸️ Pause Auto-Refresh';"
+"btn.style.backgroundColor='var(--warning-color)';"
+"st.textContent='⏳ Starting...';"
+"st.style.color='var(--info-color)';"
+"startAutoRefresh();"
+"updateSensorData();"
+"}else{"
+"btn.textContent='▶️ Resume Auto-Refresh';"
+"btn.style.backgroundColor='var(--success-color)';"
+"st.textContent='⏸️ Paused';"
+"st.style.color='var(--warning-color)';"
+"if(refreshTimer)clearInterval(refreshTimer);"
+"}}"
+
+"function startAutoRefresh(){"
+"if(refreshTimer)clearInterval(refreshTimer);"
+"refreshTimer=setInterval(updateSensorData,refreshInterval);"
+"}"
+
+"window.addEventListener('DOMContentLoaded',()=>{"
+"startAutoRefresh();"
+"setTimeout(updateSensorData,1000);"
+"});"
+
+// Update Check mit Downgrade-Option
+"function checkForUpdate(){"
+"const btn=document.getElementById('check-update-btn');"
+"const details=document.getElementById('update-details');"
+"btn.disabled=true;"
+"btn.textContent='⏳ Checking...';"
+"fetch('/check-update').then(r=>r.json()).then(data=>{"
+"btn.disabled=false;"
+"btn.textContent='Check for Updates';"
+"if(data.status==='success'){"
 "if(data.available){"
 "details.style.display='block';"
 "details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+\n"
-"'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+\n"
-"'<button onclick=\"installUpdate()\" class=\"action-button\" style=\"background:var(--success-color);margin-top:8px;\">Install Update</button>'+\n"
+"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+"
+"'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Current: '+data.currentVersion+' | Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+"
+"'<button onclick=\"installUpdate()\" class=\"action-button\" style=\"background:var(--success-color);margin-top:8px;\">⬆️ Install Update</button>'+"
 "'</div>';"
-"}else{"
-"if(data.isNewerVersion){"
+"}else if(data.isNewerVersion){"
 "details.style.display='block';"
 "details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+\n"
-"'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Version Mismatch Detected</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:12px;color:var(--primary-text-color);\">Your installed version (<strong>'+data.currentVersion+'</strong>) is newer than the latest release (<strong>'+data.latestVersion+'</strong>).</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">This typically indicates you are running a development or pre-release version. Your version might be outdated if you are on a feature branch.</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">⚠️ You can still downgrade to the stable release if needed.</p>'+\n"
-"'<button onclick=\"if(confirm(\\'Are you sure you want to downgrade to version '+data.latestVersion+'?\\'))installUpdate()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⬇️ Downgrade to Stable Release</button>'+\n"
-"'</div>';"
-"}else{"
-"details.style.display='block';"
-"details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+\n"
-"'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+\n"
-"'</div>';"
-"}"
-"}"
-    "}else if(data.status==='cert_failed'){"
-    "details.style.display='block';"
-    "details.innerHTML="
-    "'<div style=\"padding:16px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+\n"
-    "'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Certificate Validation Failed</p>'+\n"
-    "'<p style=\"margin:8px 0;font-size:12px;color:var(--primary-text-color);\">The secure connection to GitHub could not be established because certificate validation failed.</p>'+\n"
-    "'<p style=\"margin:8px 0;font-size:12px;color:var(--primary-text-color);\"><strong>Do you want to proceed without certificate validation?</strong></p>'+\n"
-    "'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">⚠️ Warning: This will disable SSL certificate verification. The connection will still be encrypted, but the server identity cannot be verified.</p>'+\n"
-    "'<div style=\"margin-top:12px;display:flex;gap:8px;\">'+\n"
-    "'<button onclick=\"checkForUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);\">⚠️ Proceed Without Validation</button>'+\n"
-    "'<button onclick=\"cancelInsecureUpdate()\" class=\"action-button\" style=\"background:var(--error-color);\">✗ Cancel</button>'+\n"
-    "'</div>'+\n"
-    "'</div>';"
-    "}else{"
-    "details.style.display='block';"
-    "details.innerHTML="
-    "'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+\n"
-    "'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+\n"
-    "'</div>';"
-    "}"
-    "}).catch(e=>{"
-    "btn.disabled=false;"
-    "btn.textContent='Check for Updates';"
-    "console.error('Error:',e);"
-    "});"
-    "}\n"
-    
-    "function checkForUpdateInsecure(){"
-    "const btn=document.getElementById('check-update-btn');"
-    "const details=document.getElementById('update-details');"
-    "details.innerHTML='<p style=\"text-align:center;color:var(--warning-color);\">⏳ Checking without certificate validation...</p>';"
-    "fetch('/check-update-insecure').then(r=>r.json()).then(data=>{"
-    "if(data.status==='success'){"
-"if(data.available){"
-"details.style.display='block';"
-"details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+\n"
-"'<p style=\"margin:4px 0;font-weight:500;color:var(--success-color);\">✓ New version available: '+data.latestVersion+'</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--warning-color);\">⚠️ Connection established without certificate validation</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">Published: '+new Date(data.publishedAt).toLocaleString()+'</p>'+\n"
-"'<button onclick=\"installUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⚠️ Install Update (Insecure)</button>'+\n"
-"'</div>';"
-"}else{"
-"if(data.isNewerVersion){"
-"details.style.display='block';"
-"details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+\n"
-"'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Version Mismatch Detected</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:12px;color:var(--primary-text-color);\">Your installed version (<strong>'+data.currentVersion+'</strong>) is newer than the latest release (<strong>'+data.latestVersion+'</strong>).</p>'+\n"
-"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">This typically indicates a development version. Your version might be outdated if you are on a feature branch.</p>'+\n"
-"'<button onclick=\"if(confirm(\\'Are you sure you want to downgrade to version '+data.latestVersion+' without certificate validation?\\'))installUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⚠️ Downgrade to Stable (Insecure)</button>'+\n"
+"'<div style=\"padding:12px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Development Version Detected</p>'+"
+"'<p style=\"margin:8px 0;font-size:12px;\">Your version: <strong>'+data.currentVersion+'</strong> | Stable release: <strong>'+data.latestVersion+'</strong></p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">You are running a newer development or pre-release version.</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--warning-color);\">⚠️ Downgrading will replace your current version with the stable release.</p>'+"
+"'<button onclick=\"if(confirm(\\'Downgrade from '+data.currentVersion+' to '+data.latestVersion+'?\\\\n\\\\nThis will replace your current version.\\'))installUpdate()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⬇️ Downgrade to Stable</button>'+"
 "'</div>';"
 "}else{"
 "details.style.display='block';"
 "details.innerHTML="
-"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+\n"
-"'<p style=\"margin:0;color:var(--info-color);\">✓ You are running the latest version</p>'+\n"
+"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--info-color);\">✓ Running latest stable version: '+data.currentVersion+'</p>'+"
 "'</div>';"
 "}"
+"}else if(data.status==='cert_failed'){"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:16px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Certificate Validation Failed</p>'+"
+"'<p style=\"margin:8px 0;font-size:12px;\">Cannot verify GitHub server identity. Proceed without validation?</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--secondary-text-color);\">⚠️ Connection will be encrypted but server identity unverified.</p>'+"
+"'<div style=\"margin-top:12px;display:flex;gap:8px;\">'+"
+"'<button onclick=\"checkForUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);\">⚠️ Proceed Insecure</button>'+"
+"'<button onclick=\"cancelInsecureUpdate()\" class=\"action-button\" style=\"background:var(--error-color);\">✗ Cancel</button>'+"
+"'</div></div>';"
+"}else{"
+"details.style.display='block';"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--error-color);\">✗ Update check failed</p>'+"
+"'</div>';"
 "}"
-    "}else{"
-    "details.style.display='block';"
-    "details.innerHTML="
-    "'<div style=\"padding:12px;background:rgba(244,67,54,0.1);border-left:4px solid var(--error-color);border-radius:4px;\">'+\n"
-    "'<p style=\"margin:0;color:var(--error-color);\">✗ Failed to check for updates</p>'+\n"
-    "'</div>';"
-    "}"
-    "}).catch(e=>{"
-    "console.error('Error:',e);"
-    "});"
-    "}\n"
-    
-    "function cancelInsecureUpdate(){"
-    "const details=document.getElementById('update-details');"
-    "details.style.display='none';"
-    "}\n"
-    
-    // Install update
+"}).catch(e=>{"
+"btn.disabled=false;"
+"btn.textContent='Check for Updates';"
+"console.error('Error:',e);"
+"});}"
 
+"function checkForUpdateInsecure(){"
+"const details=document.getElementById('update-details');"
+"details.innerHTML='<p style=\"text-align:center;color:var(--warning-color);\">⏳ Checking (insecure)...</p>';"
+"fetch('/check-update-insecure').then(r=>r.json()).then(data=>{"
+"if(data.status==='success'){"
+"if(data.available){"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(76,175,80,0.1);border-left:4px solid var(--success-color);border-radius:4px;\">'+"
+"'<p style=\"margin:4px 0;font-weight:500;\">✓ New version: '+data.latestVersion+'</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;color:var(--warning-color);\">⚠️ Connection without certificate validation</p>'+"
+"'<p style=\"margin:8px 0;font-size:11px;\">Size: '+(data.fileSize/1024/1024).toFixed(2)+' MB</p>'+"
+"'<button onclick=\"installUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⚠️ Install (Insecure)</button>'+"
+"'</div>';"
+"}else if(data.isNewerVersion){"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(255,152,0,0.1);border-left:4px solid var(--warning-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0 0 8px 0;font-weight:500;color:var(--warning-color);\">⚠️ Development Version</p>'+"
+"'<p style=\"margin:8px 0;font-size:12px;\">Current: <strong>'+data.currentVersion+'</strong> | Stable: <strong>'+data.latestVersion+'</strong></p>'+"
+"'<button onclick=\"if(confirm(\\'Downgrade to '+data.latestVersion+' (insecure)?\\'))installUpdateInsecure()\" class=\"action-button\" style=\"background:var(--warning-color);margin-top:8px;\">⬇️ Downgrade (Insecure)</button>'+"
+"'</div>';"
+"}else{"
+"details.innerHTML="
+"'<div style=\"padding:12px;background:rgba(33,150,243,0.1);border-left:4px solid var(--info-color);border-radius:4px;\">'+"
+"'<p style=\"margin:0;color:var(--info-color);\">✓ Running latest version</p>'+"
+"'</div>';"
+"}"
+"}}).catch(e=>console.error(e));}"
+
+"function cancelInsecureUpdate(){"
+"document.getElementById('update-details').style.display='none';"
+"}"
+
+// Install Update
 "function installUpdate(){"
-"if(!confirm('The device will restart after the update. Continue?'))return;"
+"if(!confirm('Device will restart after update. Continue?'))return;"
 "document.getElementById('update-details').style.display='none';"
 "document.getElementById('update-progress-container').style.display='block';"
 "const progressBar=document.getElementById('update-progress-bar');"
@@ -1011,48 +1083,43 @@ static void add_header(String &s, const String &title)
 ".then(p=>{"
 "consecutiveErrors=0;"
 "progressBar.style.width=p.progress+'%';"
-"progressText.textContent='Downloading firmware: '+p.progress+'%';"
+"progressText.textContent='Downloading: '+p.progress+'%';"
 "if(!p.inProgress&&p.progress>=100){"
 "clearInterval(progressInterval);"
-"progressText.textContent='Update complete! Device is rebooting...';"
+"progressText.textContent='Complete! Rebooting...';"
 "setTimeout(()=>{"
-"progressText.textContent='Waiting for device to come back online...';"
+"progressText.textContent='Waiting for device...';"
 "window.location.href='/';"
 "},15000);"
 "}"
 "})"
 ".catch(e=>{"
 "consecutiveErrors++;"
-"console.error('Progress fetch error:',e);"
 "if(consecutiveErrors>10){"
 "clearInterval(progressInterval);"
-"progressText.textContent='Connection lost. Device may still be updating...';"
-"setTimeout(()=>{window.location.href='/';},10000);"
+"progressText.textContent='Connection lost. Device updating...';"
+"setTimeout(()=>window.location.href='/',10000);"
 "}"
 "});"
 "},1000);"
 "}else{"
-"alert('Failed to start update: '+data.message);"
+"alert('Failed: '+data.message);"
 "document.getElementById('update-progress-container').style.display='none';"
 "}"
 "}).catch(e=>{"
-"console.error('Update start error:',e);"
-"alert('Failed to start update!');"
+"alert('Update failed!');"
 "document.getElementById('update-progress-container').style.display='none';"
-"});"
-"}"
+"});}"
 
-    // Install update insecure
-    "function installUpdateInsecure(){"
-"if(!confirm('⚠️ WARNING: You are about to install a firmware update without certificate validation.\\n\\n"
-"The server identity cannot be verified. Only proceed if you trust the source.\\n\\n"
-"The device will restart after the update. Continue?'))return;"
+// Install Update Insecure
+"function installUpdateInsecure(){"
+"if(!confirm('⚠️ WARNING: Installing without certificate validation!\\n\\nServer identity cannot be verified.\\n\\nDevice will restart. Continue?'))return;"
 "document.getElementById('update-details').style.display='none';"
 "document.getElementById('update-progress-container').style.display='block';"
 "const progressBar=document.getElementById('update-progress-bar');"
 "const progressText=document.getElementById('update-progress-text');"
 "progressBar.style.width='0%';"
-"progressText.textContent='Initializing update (insecure mode)...';"
+"progressText.textContent='Initializing (insecure)...';"
 "fetch('/install-update-insecure',{method:'POST'}).then(r=>r.json()).then(data=>{"
 "if(data.status==='started'){"
 "let consecutiveErrors=0;"
@@ -1062,76 +1129,27 @@ static void add_header(String &s, const String &title)
 ".then(p=>{"
 "consecutiveErrors=0;"
 "progressBar.style.width=p.progress+'%';"
-"progressText.textContent='Downloading firmware: '+p.progress+'%';"
+"progressText.textContent='Downloading: '+p.progress+'%';"
 "if(!p.inProgress&&p.progress>=100){"
 "clearInterval(progressInterval);"
-"progressText.textContent='Update complete! Device is rebooting...';"
-"setTimeout(()=>{"
-"progressText.textContent='Waiting for device to come back online...';"
-"window.location.href='/';"
-"},15000);"
+"progressText.textContent='Complete! Rebooting...';"
+"setTimeout(()=>window.location.href='/',15000);"
 "}"
 "})"
 ".catch(e=>{"
 "consecutiveErrors++;"
-"console.error('Progress fetch error:',e);"
 "if(consecutiveErrors>10){"
 "clearInterval(progressInterval);"
-"progressText.textContent='Connection lost. Device may still be updating...';"
-"setTimeout(()=>{window.location.href='/';},10000);"
+"setTimeout(()=>window.location.href='/',10000);"
 "}"
 "});"
 "},1000);"
-"}else{"
-"alert('Failed to start update: '+data.message);"
-"document.getElementById('update-progress-container').style.display='none';"
-"}"
-"}).catch(e=>{"
-"console.error('Update start error:',e);"
+"}}).catch(e=>{"
 "alert('Update failed!');"
 "document.getElementById('update-progress-container').style.display='none';"
-"});"
-"}"
+"});}"
 
-    // Highlight datarate
-        "function updateActiveDatarate(){"
-    "fetch('/api/system')"
-    ".then(r=>{"
-    "if(!r.ok)throw new Error('HTTP '+r.status);"
-    "return r.json();"
-    "})"
-    ".then(d=>{"
-    "if(!d.current_datarate){"
-    "console.warn('No datarate in response');"
-    "return;"
-    "}"
-    "const cr=d.current_datarate;"
-    "const k=(cr/1000.0).toFixed(3);"
-    "const b=document.getElementById('active-datarate');"
-    "if(b){"
-    "b.textContent=k+' kbps';"
-    "b.style.animation='none';"
-    "setTimeout(()=>b.style.animation='',10);"
-    "}"
-    "document.querySelectorAll('.datarate-item').forEach(it=>{"
-    "const ir=parseFloat(it.getAttribute('data-rate'));"
-    "if(Math.abs(ir-cr)<10){"
-    "it.classList.add('active');"
-    "}else{"
-    "it.classList.remove('active');"
-    "}"
-    "});"
-    "}).catch(e=>{"
-    "console.error('Datarate fetch failed:',e);"
-    "const b=document.getElementById('active-datarate');"
-    "if(b)b.textContent='Error';"
-    "});"
-    "}\n"
-    
-    "let datarateInterval=setInterval(updateActiveDatarate,2000);\n"
-    "updateActiveDatarate();\n"
- 
-    "</script>";
+"</script>";
     }
     
     s += "<link rel='icon' href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
@@ -1809,6 +1827,43 @@ static void add_sysinfo_footer(String &s)
          "</body></html>";
 }
 
+// API Endpoint für System-Reboot
+void handle_api_reboot() {
+    if (server.method() != HTTP_POST) {
+        server.send(405, "text/plain", "Method Not Allowed");
+        return;
+    }
+    
+    Serial.println("Reboot requested via Web Interface");
+    
+    // Sende Antwort BEVOR Reboot
+    server.send(200, "application/json", "{\"status\":\"rebooting\"}");
+    
+    // Warte kurz, damit Antwort gesendet wird
+    delay(1000);
+    
+    // Führe Reboot durch
+    ESP.restart();
+}
+void handle_api_system() {
+    JsonDocument doc;
+    
+    doc["current_datarate"] = get_current_datarate();
+    doc["toggle_interval_ms"] = config.toggle_interval_ms;
+    doc["uptime"] = uptime_sec();
+    doc["mqtt_ok"] = mqtt_ok;
+    doc["wifi_ok"] = (WiFi.status() == WL_CONNECTED);
+    doc["wifi_ssid"] = WiFi.SSID();
+    doc["wifi_ip"] = WiFi.localIP().toString();
+    doc["cpu_usage"] = serialized(String(cpu_usage, 1));
+    doc["loop_count"] = loop_count;
+    doc["version"] = LACROSSE2MQTT_VERSION;
+    
+    String output;
+    serializeJson(doc, output);
+    server.send(200, "application/json", output);
+}
+
 void handle_index()
 {
     String index;
@@ -2212,6 +2267,19 @@ void handle_config() {
             config_changed = true;
         config.ha_discovery = tmp;
     }
+
+    if (server.hasArg("toggle_interval")) {
+        String _interval = server.arg("toggle_interval");
+     int new_interval = _interval.toInt() * 1000; // Sekunden zu Millisekunden
+        if (new_interval >= 5000 && new_interval <= 300000) {
+            if (new_interval != config.toggle_interval_ms) {
+                config.toggle_interval_ms = new_interval;
+                config.changed = true;
+                config_changed = true;
+                Serial.println("Toggle interval changed to: " + String(config.toggle_interval_ms) + "ms");
+            }
+        }
+    }
     
     // Prüfe ob IRGENDEINE Protokoll-Checkbox gesendet wurde
     bool proto_form_submitted = false;
@@ -2366,18 +2434,9 @@ void handle_config() {
     }
     resp += "</div>";
     
-    resp += "<div class='card'>";
-    resp += "<h2>Quick Actions</h2>";
-    resp += "<div class='action-buttons'>";
-    resp += "<a href='/update' class='action-button'>📦 Local Firmware update</a>";
-    if (config.debug_mode) {
-        resp += "<a href='/debug.html' class='action-button action-button-warning'>🐛 Debug Log</a>";
-    }
-    resp += "<a href='/' class='action-button'>🏠 Main Page</a>";
-    resp += "</div>";
 
+    resp += "<div class='card'>";
     resp += "<h2>📡 Active Data Rates</h2>";
-    
     // Kompakte Badge-Anzeige
     resp += "<div style='display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0;'>";
     
@@ -2405,18 +2464,33 @@ void handle_config() {
     if (!any_active) {
         resp += "<span class='status-badge status-error'>⚠ None</span>";
     }
-    
     resp += "</div>";
+
     int interval_sec = get_interval();
     resp += "<span class='info-text' style='color: var(--secondary-text-color);'>(⟳ " + String(interval_sec) + "s)</span>";
     resp += "</p>";
+
+    resp += "<h2>Actions</h2>";
+    resp += "<div class='action-buttons'>";
+    resp += "<a href='/update' class='action-button'>📦 Local Firmware update</a>";
+    if (config.debug_mode) {
+        resp += "<a href='/debug.html' class='action-button action-button-warning'>🐛 Debug Log</a>";
+    }
+    resp += "<a href='/' class='action-button'>🏠 Main Page</a>";
+    resp += "</div>";
+
+        resp += "<div class='info-row' style='margin-top:15px;'>";
+    resp += "<button onclick='confirmReboot()' style='width:100%;padding:12px;background-color:#dc3545;color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.3s ease;'>";
+    resp += "🔄 System neu starten";
+    resp += "</button>";
+    resp += "</div>";
     
     resp += "</div>";
 
     resp += "<div class='card'>";
     resp += "<h2>🔄 Firmware Update</h2>";
     resp += "<p class='info-text'>Current Version: <strong>" + String(LACROSSE2MQTT_VERSION) + "</strong></p>";
-    resp += "<div id='update-status' style='margin: 12px 0;'>";
+    resp += "<div id='firmware-update-status' style='margin: 12px 0;'>";
     resp += "<button onclick='checkForUpdate()' class='action-button' id='check-update-btn'>Check for Updates</button>";
     resp += "</div>";
     resp += "<div id='update-details' style='display: none; margin-top: 12px;'></div>";
@@ -2606,7 +2680,22 @@ void handle_config() {
     resp += "</form>";
     resp += "</div>";
 
-    // ZEILE ~2120 - Kompletter Ersatz der Protokoll-Sektion:
+    resp += "<div class='card'>";
+    resp += "<h2>⏱️ Protocol Switching Settings</h2>";
+    resp += "<form action='/config.html'>";
+    resp += "<label>Toggle Interval (seconds):</label>";
+    resp += "<div class='option-description'>Time in seconds before switching to next protocol (5-300 seconds)</div>";
+    resp += "<input type='number' name='toggle_interval' min='5' max='300' value='";
+    resp += String(config.toggle_interval_ms / 1000);
+    resp += "' placeholder='30'>";
+    resp += "<div style='margin-top: 8px;'>";
+    resp += "<span class='info-text' style='font-size: 12px; color: var(--secondary-text-color);'>";
+    resp += "Current: " + String(config.toggle_interval_ms / 1000) + " seconds";
+    resp += "</span>";
+    resp += "</div>";
+    resp += "<button type=\"submit\">Update Interval</button>";
+    resp += "</form>";
+    resp += "</div>";
 
     resp += "<div class='card'>";
     resp += "<h2>📡 Protocol Settings</h2>";
@@ -3012,6 +3101,8 @@ void setup_web()
     server.on("/install-update", HTTP_POST, handle_install_update);
     server.on("/install-update-insecure", HTTP_POST, handle_install_update_insecure);
     server.on("/update-progress", handle_update_progress);
+    server.on("/api/reboot", HTTP_POST, handle_api_reboot);
+    server.on("/api/system", handle_api_system);
     
     server.onNotFound([]() {
         server.send(404, "text/plain", "The content you are looking for was not found.\n");
