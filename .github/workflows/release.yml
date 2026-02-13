@@ -55,7 +55,8 @@ jobs:
         run: |
           echo "Starting Arduino CLI build..."
           arduino-cli compile --fqbn esp32:esp32:ttgo-lora32 \
-          --build-property "build.partitions=default" \
+          --build-property "build.partitions=huge_app" \
+          --build-property "upload.maximum_size=3145728" 
           --build-property "build.flash_mode=qio" \
           --build-property "build.flash_freq=80m" \
           --output-dir build/output \
