@@ -16,25 +16,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-          
-      - name: Cache PlatformIO
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio
-            .pio
-          key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
-          restore-keys: |
-            ${{ runner.os }}-pio-
-          
-      - name: Install PlatformIO
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+        
+      - name: Install ESP32 platform
         run: |
-          pip install --upgrade platformio
-          pio --version
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          
+      - name: Install required libraries
+        run: |
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Adafruit SSD1306"
+          arduino-cli lib install "PubSubClient"
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "WiFiManager"
           
       - name: Verify source files
         run: |
@@ -44,17 +42,27 @@ jobs:
             exit 1
           fi
           echo "✓ Source files found"
-          ls -la *.ino *.cpp *.h
+          ls -la *.ino *.cpp *.h 2>/dev/null || true
+          
+      - name: Create sketch directory structure
+        run: |
+          # Arduino CLI benötigt dass die .ino Datei in einem Verzeichnis mit gleichem Namen liegt
+          mkdir -p build/lacrosse2mqtt
+          cp *.ino *.cpp *.h build/lacrosse2mqtt/ 2>/dev/null || true
+          ls -la build/lacrosse2mqtt/
           
       - name: Build firmware
         run: |
-          echo "Starting PlatformIO build..."
-          pio run --environment ttgo-lora32-v21 --verbose
+          echo "Starting Arduino CLI build..."
+          arduino-cli compile --fqbn esp32:esp32:ttgo-lora32:PartitionScheme=default,FlashMode=qio,FlashFreq=80,UploadSpeed=921600 \
+            --build-property "build.extra_flags=-DCORE_DEBUG_LEVEL=0 -DCONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384 -DCONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096 -DBOARD_HAS_PSRAM -mfix-esp32-psram-cache-issue" \
+            --output-dir build/output \
+            --verbose \
+            build/lacrosse2mqtt
           
       - name: Find and rename binary
         run: |
-          # Verwende ttgo-lora32-v21 statt esp32dev
-          FIRMWARE_PATH=".pio/build/ttgo-lora32-v21/firmware.bin"
+          FIRMWARE_PATH="build/output/lacrosse2mqtt.ino.bin"
           OUTPUT_NAME="lacrosse2mqtt.${{ github.ref_name }}.bin"
           
           echo "Looking for firmware at: $FIRMWARE_PATH"
@@ -62,7 +70,7 @@ jobs:
           if [ ! -f "$FIRMWARE_PATH" ]; then
             echo "Error: Firmware not found at $FIRMWARE_PATH"
             echo "Build directory contents:"
-            ls -laR .pio/build/ || echo "Build directory doesn't exist"
+            ls -laR build/ || echo "Build directory doesn't exist"
             exit 1
           fi
           

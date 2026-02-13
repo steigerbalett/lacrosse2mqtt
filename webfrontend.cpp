@@ -3104,11 +3104,29 @@ void handle_debug() {
 // Schöne Upload-Seite
 void handle_update_page() {
     String page;
-    add_header(page, "Firmware Update");
+    add_header(page, "LaCrosse2MQTT Firmware Update Configuration");
     
     page += "<div class='card'>";
     page += "<h2>📦 Firmware Update</h2>";
     page += "<p class='info-text'>Upload a new firmware binary (.bin file) to update your device.</p>";
+
+    page += "<h3>🌐 Online Update (Automatic)</h3>";
+    page += "<p class='info-text'>Current Version: <strong>" + String(LACROSSE2MQTT_VERSION) + "</strong></p>";
+    page += "<div id='firmware-update-status' style='margin: 12px 0;'>";
+    page += "<button onclick='checkForUpdate()' class='action-button' id='check-update-btn'>Check for Updates</button>";
+    page += "</div>";
+    page += "<div id='update-details' style='display: none; margin-top: 12px;'></div>";
+    page += "<div id='update-progress-container' style='display: none; margin-top: 12px;'>";
+    page += "<p class='info-text'>Installing update...</p>";
+    page += "<div style='width: 100%; height: 20px; background: var(--divider-color); border-radius: 10px; overflow: hidden;'>";
+    page += "<div id='update-progress-bar' style='width: 0%; height: 100%; background: var(--success-color); transition: width 0.3s;'></div>";
+    page += "</div>";
+    page += "<p id='update-progress-text' class='info-text' style='text-align: center; margin-top: 4px;'>0%</p>";
+    page += "</div>";
+
+    page += "<hr style='margin: 24px 0;'>"; // Trennung zwischen Online und Manual Update
+
+    page += "<h3>📁 Manual Update (Upload File)</h3>";
     
     page += "<div style='background-color: rgba(255, 152, 0, 0.1); border: 1px solid var(--warning-color); border-radius: 8px; padding: 16px; margin: 16px 0;'>";
     page += "<p style='margin: 0; color: var(--warning-color); font-weight: 500;'>⚠️ Warning</p>";
