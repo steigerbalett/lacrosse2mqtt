@@ -54,11 +54,15 @@ jobs:
       - name: Build firmware
         run: |
           echo "Starting Arduino CLI build..."
-          arduino-cli compile --fqbn esp32:esp32:ttgo-lora32:PartitionScheme=default,FlashMode=qio,FlashFreq=80,UploadSpeed=921600 \
-            --build-property "build.extra_flags=-DCORE_DEBUG_LEVEL=0 -DCONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384 -DCONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096 -DBOARD_HAS_PSRAM -mfix-esp32-psram-cache-issue" \
-            --output-dir build/output \
-            --verbose \
-            build/lacrosse2mqtt
+          arduino-cli compile --fqbn esp32:esp32:ttgo-lora32 \
+          --build-property "build.partitions=default" \
+          --build-property "build.flash_mode=qio" \
+          --build-property "build.flash_freq=80m" \
+          --build-property "upload.speed=921600" \
+          --build-property "build.extra_flags=-DCORE_DEBUG_LEVEL=0 ..." \
+          --output-dir build/output \
+          --verbose \
+          build/lacrosse2mqtt
           
       - name: Find and rename binary
         run: |
